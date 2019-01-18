@@ -1,4 +1,4 @@
-﻿import pygame
+import pygame
 import math
 from copy import deepcopy
 from random import randrange as r, choice as c
@@ -23,7 +23,7 @@ class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         global pp
         super().__init__()
-        self.image = pygame.transform.scale(load_image('player.png'), (50, 98))
+        self.image = pygame.transform.scale(load_image('player.png'), (37, 73))
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = x, y
         self.ftimer = 0
@@ -48,6 +48,7 @@ class Player(pygame.sprite.Sprite):
             self.j = False
         if pygame.sprite.spritecollideany(self, danger):
             self.take_damage()
+        self.fall()
         self.draw()
 
     def do(self):
@@ -60,22 +61,35 @@ class Player(pygame.sprite.Sprite):
     def move(self, x, y):
         if self.view == 1 and x < 0:
             self.image = pygame.transform.flip(self.image, True, False)
-            self.view = 0
-        if self.view == 0 and x > 0:
+            self.view = -1
+        if self.view == -1 and x > 0:
             self.image = pygame.transform.flip(self.image, True, False)
             self.view = 1
         self.rect.x += x
         self.rect.y += y
-        if pygame.sprite.spritecollideany(self, static):
-            self.rect.y = pygame.sprite.spritecollideany(self, static).rect.y - self.rect[3] + 1
+        obj = pygame.sprite.spritecollideany(self, static)
+        if obj:
+            if self.view == 1:
+                if self.rect.x + self.rect[2] - 5 <= obj.rect.x:
+                    self.rect.x -= x
+                else:
+                    self.rect.y = obj.rect.y - self.rect[3] + 1
+            if self.view == -1:
+                if self.rect.x + 5 >= obj.rect.x + obj.rect[3]:
+                    self.rect.x -= x
+                else:
+                    self.rect.y = obj.rect.y - self.rect[3] + 1
 
     def jump(self):
-        self.todo[0] = [[(0, -30 + i * 2), self.move] for i in range(10)]
+        self.todo[0] = [[(0, -30 + i * 2), self.move] for i in range(15)]
         self.j = False
+
+    def shift(self):
+        self.todo[0] = [[(100 * self.view, 0), self.move] for i in range(2)]
 
     def take_damage(self):
         if not self.protected:
-            pygame.time.set_timer(protect, 500)
+            pygame.time.set_timer(protect, 1000)
             self.chtex('player2.png')
             self.todo[1].append([['player.png'], self.chtex])
             self.hp -= 1
@@ -84,14 +98,14 @@ class Player(pygame.sprite.Sprite):
         self.jump()
 
     def chtex(self, image):
-        self.image = pygame.transform.scale(load_image(image), (50, 98))
-        if self.view == 0:
+        self.image = pygame.transform.scale(load_image(image), (37, 73))
+        if self.view == -1:
             self.image = pygame.transform.flip(self.image, True, False)
 
     def fall(self):
         if self.st == '':
-            self.move(0, self.ftimer + 5)
-            self.ftimer += 0.2
+            self.move(0, self.ftimer)
+            self.ftimer += 0.3
         else:
             self.ftimer = 0
 
@@ -116,19 +130,19 @@ class Spike(pygame.sprite.Sprite):
 pygame.init()
 pygame.font.init()
 running = True
-size = w, h = 1000, 500
+size = w, h = 1500, 800
 screen = pygame.display.set_mode(size)
 ss, stairs, pp, danger = pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group()
 static = pygame.sprite.Group()
 p = Player(0, 0)
 Platform(200, 300)
+Platform(0, 300)
 for i in range(10):
     Spike(300 + 100 * i, 350)
     Platform(300 + 100 * i, 400)
-fall = pygame.USEREVENT
+clock = pygame.time.Clock()
 doing = pygame.USEREVENT + 1
 protect = pygame.USEREVENT + 2
-pygame.time.set_timer(fall, 20)
 pygame.time.set_timer(doing, 20)
 
 
@@ -140,18 +154,19 @@ while running:
             if pygame.key.get_pressed()[pygame.K_SPACE]:
                 if p.j:
                     p.jump()
+            if pygame.key.get_pressed()[pygame.K_LSHIFT]:
+                p.shift()
         if event.type == doing:
             p.do()
-        if event.type == fall:
-            p.fall()
         if event.type == protect:
             p.protected = False
     if pygame.key.get_pressed()[pygame.K_LEFT]:
-        p.move(-1, 0)
+        p.move(-8, 0)
     elif pygame.key.get_pressed()[pygame.K_RIGHT]:
-        p.move(1, 0)
+        p.move(8, 0)
     screen.fill((150, 150, 150))
     p.update()
     danger.draw(screen)
     static.draw(screen)
+    clock.tick(60)
     pygame.display.flip()
