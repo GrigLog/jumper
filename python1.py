@@ -1,7 +1,4 @@
 import pygame
-import math
-from copy import deepcopy
-from random import randrange as r, choice as c
 import os
 import ctypes
 
@@ -66,6 +63,7 @@ class Player(pygame.sprite.Sprite):
                     del self.todo[i][0]
 
     def move(self, x, y):
+        d.move(x, y)
         if self.view == 1 and x < 0:
             self.image = pygame.transform.flip(self.image, True, False)
             self.view = -1
@@ -78,11 +76,13 @@ class Player(pygame.sprite.Sprite):
         if obj:
             if self.view == 1:
                 if self.rect.x + self.rect[2] - 5 <= obj.rect.x:
+                    d.move(-x, 0)
                     self.rect.x -= x
                 else:
                     self.rect.y = obj.rect.y - self.rect[3] + 1
             if self.view == -1:
                 if self.rect.x + 5 >= obj.rect.x + obj.rect[3]:
+                    d.move(-x, 0)
                     self.rect.x -= x
                 else:
                     self.rect.y = obj.rect.y - self.rect[3] + 1
@@ -130,8 +130,53 @@ class Spike(pygame.sprite.Sprite):
         self.mask = pygame.mask.from_surface(self.image)
 
 
+class Flash(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        global flasht
+        super().__init__(static)
+        self.image = pygame.transform.scale(load_image('flash.png'), (128, 27))
+        self.rect = self.image.get_rect()
+        self.rect.x, self.rect.y = x + 30, y - 8
+        pygame.time.set_timer(flasht, 200)
+        pygame.event.post(pygame.event.Event(flasht, {'cell': self}))
+
+
 class Dagger(pygame.sprite.DirtySprite):
-    pass
+    def __init__(self):
+        global dd
+        dd = pygame.sprite.Group()
+        super().__init__(dd)
+        self.image = pygame.transform.scale(load_image('dagger.png'), (128, 12))
+        self.dirty = 0
+        self.rect = self.image.get_rect()
+        self.rect.x = p.rect.x + 18 + 18 * p.view
+        self.rect.y = p.rect.y + 46
+
+    def update(self):
+        if p.view == 1:
+            self.image = pygame.transform.scale(load_image('dagger.png'), (128, 12))
+            self.rect.x = p.rect.x + 37
+            self.rect.y = p.rect.y + 46
+        elif p.view == -1:
+            self.image = pygame.transform.scale(pygame.transform.flip(load_image('dagger.png'), True, False), (128, 12))
+            self.rect.x = p.rect.x - 116
+            self.rect.y = p.rect.y + 46
+        if self.dirty:
+            self.attack()
+            dd.draw(screen)
+            self.dirty = 0
+
+    def attack(self):
+        Flash(self.rect.x, self.rect.y)
+
+    def chtex(self, image):
+        self.image = pygame.transform.scale(load_image(image), (128, 12))
+        if p.view == -1:
+            self.image = pygame.transform.flip(self.image, True, False)
+
+    def move(self, x, y):
+        self.rect.x += x
+        self.rect.y += y
 
 
 pygame.init()
@@ -142,12 +187,14 @@ screen = pygame.display.set_mode(size)
 ss, stairs, pp, danger = pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group()
 static = pygame.sprite.Group()
 p = Player(0, 0)
+d = Dagger()
 Platform(200, 300)
 Platform(0, 300)
 for i in range(10):
     Spike(300 + 100 * i, 350)
     Platform(300 + 100 * i, 400)
 clock = pygame.time.Clock()
+flasht = pygame.USEREVENT + 1
 protect = pygame.USEREVENT + 2
 
 
@@ -162,12 +209,20 @@ while running:
                 if p.j and p.st == 's':
                     p.st = 'j'
                     p.j = False
+            if pygame.key.get_pressed()[pygame.K_x]:
+                d.dirty = 1
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_SPACE:
                 p.st = ''
                 p.jcounter = 0
         if event.type == protect:
             p.protected = False
+        if event.type == flasht:
+            if 'cell' in event.__dict__:
+                cell = event.cell
+            else:
+                cell.kill()
+                pygame.time.set_timer(flasht, 0)
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         p.move(-8, 0)
     if pygame.key.get_pressed()[pygame.K_RIGHT]:
@@ -183,6 +238,7 @@ while running:
             p.move(0, -23)
     screen.fill((150, 150, 150))
     p.update()
+    d.update()
     danger.draw(screen)
     static.draw(screen)
     clock.tick(60)
