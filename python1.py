@@ -133,20 +133,25 @@ class Spike(pygame.sprite.Sprite):
 class Flash(pygame.sprite.Sprite):
     def __init__(self, x, y):
         global flasht
-        super().__init__(static)
-        self.image = pygame.transform.scale(load_image('flash.png'), (128, 27))
+        super().__init__(bg)
+        self.image = pygame.transform.scale(load_image('flash.png'), (192, 45))
         self.rect = self.image.get_rect()
-        self.rect.x, self.rect.y = x + 30, y - 8
-        pygame.time.set_timer(flasht, 200)
+        self.rect.x, self.rect.y = x + 30, y - 16
+        pygame.time.set_timer(flasht, 100)
         pygame.event.post(pygame.event.Event(flasht, {'cell': self}))
 
+    def destroy(self):
+        self.kill()
+        d.dirty = 0
 
-class Dagger(pygame.sprite.DirtySprite):
+
+class Dagger(pygame.sprite.Sprite):
     def __init__(self):
         global dd
         dd = pygame.sprite.Group()
         super().__init__(dd)
         self.image = pygame.transform.scale(load_image('dagger.png'), (128, 12))
+        self.a = True
         self.dirty = 0
         self.rect = self.image.get_rect()
         self.rect.x = p.rect.x + 18 + 18 * p.view
@@ -162,12 +167,17 @@ class Dagger(pygame.sprite.DirtySprite):
             self.rect.x = p.rect.x - 116
             self.rect.y = p.rect.y + 46
         if self.dirty:
-            self.attack()
             dd.draw(screen)
-            self.dirty = 0
 
     def attack(self):
-        Flash(self.rect.x, self.rect.y)
+        if self.a:
+            self.draw()
+            pygame.time.set_timer(attacking, 300)
+            self.a = False
+            Flash(self.rect.x, self.rect.y)
+
+    def draw(self):
+        self.dirty = 2
 
     def chtex(self, image):
         self.image = pygame.transform.scale(load_image(image), (128, 12))
@@ -184,7 +194,7 @@ pygame.font.init()
 running = True
 size = w, h = 1200, 600
 screen = pygame.display.set_mode(size)
-ss, stairs, pp, danger = pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group()
+ss, stairs, pp, danger, bg = [pygame.sprite.Group() for i in range(5)]
 static = pygame.sprite.Group()
 p = Player(0, 0)
 d = Dagger()
@@ -194,6 +204,7 @@ for i in range(10):
     Spike(300 + 100 * i, 350)
     Platform(300 + 100 * i, 400)
 clock = pygame.time.Clock()
+attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
 protect = pygame.USEREVENT + 2
 
@@ -202,6 +213,7 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
         if event.type == pygame.KEYDOWN:
             if pygame.key.get_pressed()[pygame.K_LSHIFT]:
                 p.shift()
@@ -210,19 +222,26 @@ while running:
                     p.st = 'j'
                     p.j = False
             if pygame.key.get_pressed()[pygame.K_x]:
-                d.dirty = 1
+                d.attack()
+
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_SPACE:
                 p.st = ''
                 p.jcounter = 0
+
         if event.type == protect:
             p.protected = False
+
         if event.type == flasht:
             if 'cell' in event.__dict__:
                 cell = event.cell
             else:
-                cell.kill()
+                cell.destroy()
                 pygame.time.set_timer(flasht, 0)
+
+        if event.type == attacking:
+            d.a = True
+
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         p.move(-8, 0)
     if pygame.key.get_pressed()[pygame.K_RIGHT]:
@@ -241,5 +260,6 @@ while running:
     d.update()
     danger.draw(screen)
     static.draw(screen)
+    bg.draw(screen)
     clock.tick(60)
     pygame.display.flip()
