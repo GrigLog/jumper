@@ -131,12 +131,15 @@ class Spike(pygame.sprite.Sprite):
 
 
 class Flash(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, rev):
         global flasht
         super().__init__(bg)
         self.image = pygame.transform.scale(load_image('flash.png'), (192, 45))
         self.rect = self.image.get_rect()
-        self.rect.x, self.rect.y = x + 30, y - 16
+        self.rect.x, self.rect.y = x - 20, y - 16
+        if rev:
+            self.image = pygame.transform.flip(self.image, True, False)
+            self.rect.x -= 20
         pygame.time.set_timer(flasht, 100)
         pygame.event.post(pygame.event.Event(flasht, {'cell': self}))
 
@@ -174,7 +177,10 @@ class Dagger(pygame.sprite.Sprite):
             self.draw()
             pygame.time.set_timer(attacking, 300)
             self.a = False
-            Flash(self.rect.x, self.rect.y)
+            if p.view == 1:
+                Flash(self.rect.x, self.rect.y, False)
+            else:
+                Flash(self.rect.x, self.rect.y, True)
 
     def draw(self):
         self.dirty = 2
