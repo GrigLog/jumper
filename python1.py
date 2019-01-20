@@ -27,7 +27,22 @@ def game_over():
         if event.type == pygame.QUIT:
             running = False
     screen.fill((0, 0, 0))
-    screen.blit(font1.render('GAME OVER', False, (255, 255, 255)), (int((w - 500) / 2), int((h - 200) / 2)))
+    Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 100, 60, 'YES!')
+    Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 100, 60, 'EXIT')
+    screen.blit(font1.render('GAME OVER.', False, (255, 0, 0)), ((w - 500) // 2, (h - 200) // 2 - 200))
+    screen.blit(font1.render('RESTART?', False, (255, 255, 255)), ((w - 500) // 2 + 10, (h - 200) // 2 - 100))
+    buttons.draw(screen)
+
+
+class Button(pygame.sprite.Sprite):
+    def __init__(self, x, y, w, h, text, font=None):
+        super().__init__(buttons)
+        self.image = pygame.Surface((w, h), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+        self.rect.x, self.rect.y = x - 5, y
+        pygame.draw.rect(self.image, (255, 255, 255), pygame.Rect(0, 0, w, h), 5)
+        if font is None:
+            screen.blit(font2.render(text, False, (255, 255, 255)), (x, y))
 
 
 class Player(pygame.sprite.Sprite):
@@ -234,10 +249,11 @@ end = False
 pygame.init()
 pygame.font.init()
 font1 = pygame.font.Font('data/Samson.ttf', 100)
+font2 = pygame.font.Font('data/Samson.ttf', 50)
 running = True
 size = w, h = 1200, 600
 screen = pygame.display.set_mode(size)
-ss, stairs, pp, danger, bg, health = [pygame.sprite.Group() for i in range(6)]
+ss, stairs, pp, danger, bg, health, buttons = [pygame.sprite.Group() for i in range(7)]
 static = pygame.sprite.Group()
 p = Player(0, 0)
 d = Dagger()
@@ -307,6 +323,7 @@ def main():
     danger.draw(screen)
     static.draw(screen)
     bg.draw(screen)
+    buttons.draw(screen)
 
 
 while running:
