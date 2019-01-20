@@ -3,7 +3,7 @@ import os
 import ctypes
 
 
-sw, sh = ctypes.windll.user32.GetSystemMetrics(0),\
+w, h = ctypes.windll.user32.GetSystemMetrics(0),\
 ctypes.windll.user32.GetSystemMetrics(1)
 
 
@@ -64,16 +64,8 @@ class Player(pygame.sprite.Sprite):
         pp.add(self)
 
     def update(self):
-        self.do()
         self.fall()
-        if pygame.sprite.spritecollideany(self, static):
-            self.st = 's'
-            self.sh = True
-            self.j = True
-        else:
-            if self.st != 'j':
-                self.st = ''
-            self.j = False
+        self.do()
         if pygame.sprite.spritecollideany(self, danger):
             self.take_damage()
         pp.draw(screen)
@@ -86,7 +78,7 @@ class Player(pygame.sprite.Sprite):
                     del self.todo[i][0]
 
     def move(self, x, y):
-        d.move(x, y)
+        print(x, y)
         if self.view == 1 and x < 0:
             self.image = pygame.transform.flip(self.image, True, False)
             self.view = -1
@@ -97,18 +89,21 @@ class Player(pygame.sprite.Sprite):
         self.rect.y += y
         obj = pygame.sprite.spritecollideany(self, static)
         if obj:
-            if self.view == 1:
-                if self.rect.x + self.rect[2] - 5 <= obj.rect.x:
-                    d.move(-x, 0)
-                    self.rect.x -= x
-                else:
-                    self.rect.y = obj.rect.y - self.rect[3] + 1
-            if self.view == -1:
-                if self.rect.x + 5 >= obj.rect.x + obj.rect[3]:
-                    d.move(-x, 0)
-                    self.rect.x -= x
-                else:
-                    self.rect.y = obj.rect.y - self.rect[3] + 1
+            if x > 0:
+                self.rect.x = obj.rect.x - self.rect[2] - 1
+            elif x < 0:
+                self.rect.x = obj.rect.x + obj.rect[2] + 1
+            elif y > 0:
+                self.st = 's'
+                self.sh = True
+                self.j = True
+                self.rect.y = obj.rect.y - self.rect[3] - 1
+            elif y < 0:
+                self.rect.y = obj.rect.y + obj.rect[3] + 1
+        else:
+            if self.st != 'j':
+                self.st = ''
+            self.j = False
 
     def jump(self):
         self.todo[0] = [[(0, -30), self.move] for i in range(14)]
@@ -141,7 +136,7 @@ class Player(pygame.sprite.Sprite):
 class Hitpoint(pygame.sprite.Sprite):
     def __init__(self, n):
         super().__init__(health)
-        self.image = pygame.transform.scale(load_image('hp.png'), (64, 60))
+        self.image = pygame.transform.scale(load_image('hp.png'), (60, 51))
         self.rect = self.image.get_rect()
         self.rect.x = 70 * n
 
@@ -174,7 +169,7 @@ class Platform(pygame.sprite.Sprite):
 class Spike(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__(danger)
-        self.image = pygame.transform.scale(load_image('spikes.png'), (102, 54))
+        self.image = pygame.transform.scale(load_image('spikes.png'), (100, 54))
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = x, y
         self.mask = pygame.mask.from_surface(self.image)
@@ -251,7 +246,7 @@ pygame.font.init()
 font1 = pygame.font.Font('data/Samson.ttf', 100)
 font2 = pygame.font.Font('data/Samson.ttf', 50)
 running = True
-size = w, h = 1200, 600
+size = w, h
 screen = pygame.display.set_mode(size)
 ss, stairs, pp, danger, bg, health, buttons = [pygame.sprite.Group() for i in range(7)]
 static = pygame.sprite.Group()
@@ -262,6 +257,8 @@ Platform(0, 300)
 for i in range(10):
     Spike(300 + 100 * i, 350)
     Platform(300 + 100 * i, 400)
+for i in range(20):
+    Platform(i * 100, 700)
 clock = pygame.time.Clock()
 attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
@@ -314,7 +311,7 @@ def main():
             if p.jcounter > 24:
                 p.jcounter = 0
                 p.st = ''
-            p.move(0, -23)
+            p.move(0, -20)
 
     screen.fill((150, 150, 150))
     p.update()
