@@ -64,6 +64,7 @@ class Player(pygame.sprite.Sprite):
 
     def player_init(self):
         global pp
+        self.vert = 0
         self.hp = Health(3)
         self.protected = False
         pp = pygame.sprite.Group()
@@ -190,11 +191,25 @@ class Flash(pygame.sprite.Sprite):
         global flasht
         super().__init__(flash)
         self.image = pygame.transform.scale(load_image('flash.png'), (192, 45))
-        self.rect = self.image.get_rect()
-        self.rect.x, self.rect.y = x - 20, y - 16
+        if p.vert == 1:
+            self.image = pygame.transform.rotate(self.image, 90)
+        elif p.vert == -1:
+            self.image = pygame.transform.rotate(self.image, -90)
         if rev:
             self.image = pygame.transform.flip(self.image, True, False)
-            self.rect.x -= 20
+
+        self.rect = self.image.get_rect()
+        self.rect.x, self.rect.y = x - 20, y - 16
+
+        if p.vert == 1:
+            self.rect.y -= 30
+        elif p.vert == -1:
+            self.rect.y += 10
+        if rev:
+            if p.vert == 0:
+                self.rect.x -= 20
+            else:
+                self.rect.x += 5
         pygame.time.set_timer(flasht, 100)
         pygame.event.post(pygame.event.Event(flasht, {'cell': self}))
         coll = pygame.sprite.groupcollide(flash, enemies, False, False)
@@ -220,14 +235,30 @@ class Dagger(pygame.sprite.Sprite):
         self.rect.y = p.rect.y + 46
 
     def update(self):
-        if p.view == 1:
-            self.image = pygame.transform.scale(load_image('dagger.png'), (128, 12))
-            self.rect.x = p.rect.x + 37
-            self.rect.y = p.rect.y + 46
-        elif p.view == -1:
-            self.image = pygame.transform.scale(pygame.transform.flip(load_image('dagger.png'), True, False), (128, 12))
-            self.rect.x = p.rect.x - 116
-            self.rect.y = p.rect.y + 46
+        if p.vert:
+            if p.vert == 1:
+                self.image = pygame.transform.rotate(pygame.transform.scale(load_image('dagger.png'), (128, 12)), 90)
+                self.rect.x = p.rect.x + 30
+                self.rect.y = p.rect.y - 100
+                if p.view == -1:
+                    self.image = pygame.transform.flip(self.image, True, False)
+                    self.rect.x -= 30
+            elif p.vert == -1:
+                self.image = pygame.transform.rotate(pygame.transform.scale(load_image('dagger.png'), (128, 12)), -90)
+                self.rect.x = p.rect.x + 30
+                self.rect.y = p.rect.y + 60
+                if p.view == -1:
+                    self.image = pygame.transform.flip(self.image, True, False)
+                    self.rect.x -= 30
+        else:
+            if p.view == 1:
+                self.image = pygame.transform.scale(load_image('dagger.png'), (128, 12))
+                self.rect.x = p.rect.x + 37
+                self.rect.y = p.rect.y + 46
+            elif p.view == -1:
+                self.image = pygame.transform.scale(pygame.transform.flip(load_image('dagger.png'), True, False), (128, 12))
+                self.rect.x = p.rect.x - 116
+                self.rect.y = p.rect.y + 46
         if self.dirty:
             dd.draw(screen)
 
@@ -337,7 +368,7 @@ attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
 protect = pygame.USEREVENT + 2
 smth = pygame.USEREVENT + 3
-pygame.time.set_timer(smth, 1000)
+pygame.time.set_timer(smth, 400)
 
 
 def main():
@@ -359,6 +390,9 @@ def main():
             if event.key == pygame.K_SPACE:
                 p.st = ''
                 p.jcounter = 0
+            if event.key in [pygame.K_UP, pygame.K_DOWN]:
+                p.vert = 0
+
 
         if event.type == protect:
             pygame.time.set_timer(protect, 0)
@@ -376,7 +410,7 @@ def main():
             d.a = True
 
         if event.type == smth:
-            Enemy(choice([0, 1, 2, 13, 14]), 0)
+            Enemy(randint(0, 14), 0)
 
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         p.move(-8, 0)
@@ -384,6 +418,8 @@ def main():
         p.move(8, 0)
     if pygame.key.get_pressed()[pygame.K_UP]:
         p.vert = 1
+    if pygame.key.get_pressed()[pygame.K_DOWN]:
+        p.vert = -1
     if pygame.key.get_pressed()[pygame.K_SPACE]:
         if p.st == 'j':
             p.jcounter += 1
