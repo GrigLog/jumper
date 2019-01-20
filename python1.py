@@ -46,20 +46,24 @@ class Button(pygame.sprite.Sprite):
 
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, x, y):
-        global pp
+    def __init__(self, x, y, main=True):
         super().__init__()
         self.image = pygame.transform.scale(load_image('player.png'), (50, 80))
         self.rect = self.image.get_rect()
-        self.rect.x, self.rect.y = x, y
-        self.protected = False
+        self.rect.x, self.rect.y = int(x * 100) + 25, int(y * 100)
         self.view = 1
-        self.hp = Health(3)
         self.st = ''
         self.j = False
         self.sh = True
         self.jcounter = 0
         self.todo = [[], []]
+        if main:
+            self.player_init()
+
+    def player_init(self):
+        global pp
+        self.hp = Health(3)
+        self.protected = False
         pp = pygame.sprite.Group()
         pp.add(self)
 
@@ -78,7 +82,6 @@ class Player(pygame.sprite.Sprite):
                     del self.todo[i][0]
 
     def move(self, x, y):
-        print(x, y)
         if self.view == 1 and x < 0:
             self.image = pygame.transform.flip(self.image, True, False)
             self.view = -1
@@ -106,7 +109,7 @@ class Player(pygame.sprite.Sprite):
             self.j = False
 
     def jump(self):
-        self.todo[0] = [[(0, -30), self.move] for i in range(14)]
+        self.todo[0] = [[(0, -20), self.move] for i in range(14)]
         self.j = False
 
     def shift(self):
@@ -153,8 +156,10 @@ class Health:
         health.remove(health.sprites()[-1])
         if self.n <= 0:
             end = True
+            pygame.time.delay(800)
 
     def add(self, c=1):
+        self.n += c
         Hitpoint(self.n)
 
 
@@ -163,7 +168,7 @@ class Platform(pygame.sprite.Sprite):
         super().__init__(static)
         self.image = pygame.transform.scale(load_image('bricks.png'), (100, 100))
         self.rect = self.image.get_rect()
-        self.rect.x, self.rect.y = x, y
+        self.rect.x, self.rect.y = int(x * 100), int(y * 100)
 
 
 class Spike(pygame.sprite.Sprite):
@@ -171,14 +176,14 @@ class Spike(pygame.sprite.Sprite):
         super().__init__(danger)
         self.image = pygame.transform.scale(load_image('spikes.png'), (100, 54))
         self.rect = self.image.get_rect()
-        self.rect.x, self.rect.y = x, y
+        self.rect.x, self.rect.y = int(x * 100), int(y * 100)
         self.mask = pygame.mask.from_surface(self.image)
 
 
 class Flash(pygame.sprite.Sprite):
     def __init__(self, x, y, rev):
         global flasht
-        super().__init__(bg)
+        super().__init__(flash)
         self.image = pygame.transform.scale(load_image('flash.png'), (192, 45))
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = x - 20, y - 16
@@ -187,6 +192,10 @@ class Flash(pygame.sprite.Sprite):
             self.rect.x -= 20
         pygame.time.set_timer(flasht, 100)
         pygame.event.post(pygame.event.Event(flasht, {'cell': self}))
+        coll = pygame.sprite.groupcollide(flash, enemies, False, False)
+        if coll:
+            for e in coll[self]:
+                e.damage(5)
 
     def destroy(self):
         self.kill()
@@ -240,6 +249,33 @@ class Dagger(pygame.sprite.Sprite):
         self.rect.y += y
 
 
+class Enemy(Player):
+    def __init__(self, x, y, im='enemy1'):
+        super().__init__(x, y, False)
+        self.im = im
+        self.image = pygame.transform.scale(load_image(im + '.png'), (50, 80))
+        self.hp = 10
+        self.timer = 0
+        enemies.add(self)
+
+    def damage(self, n):
+        self.hp -= n
+        self.chtex(self.im + '-d.png')
+        self.timer = 20
+
+    def update(self):
+        self.fall()
+        if self.timer:
+            self.timer -= 1
+            if self.timer == 0:
+                self.chtex(self.im + '.png')
+        if self.hp <= 0:
+            self.kill()
+
+
+
+
+
 end = False
 pygame.init()
 pygame.font.init()
@@ -248,17 +284,20 @@ font2 = pygame.font.Font('data/Samson.ttf', 50)
 running = True
 size = w, h
 screen = pygame.display.set_mode(size)
-ss, stairs, pp, danger, bg, health, buttons = [pygame.sprite.Group() for i in range(7)]
+ss, stairs, pp, danger, bg, health, buttons, enemies, flash = [pygame.sprite.Group() for i in range(9)]
 static = pygame.sprite.Group()
 p = Player(0, 0)
 d = Dagger()
-Platform(200, 300)
-Platform(0, 300)
+Platform(2, 3)
+Platform(0, 3)
 for i in range(10):
-    Spike(300 + 100 * i, 350)
-    Platform(300 + 100 * i, 400)
+    Spike(3 + 1 * i, 3.5)
+    Platform(3 + 1 * i, 4)
 for i in range(20):
-    Platform(i * 100, 700)
+    Platform(i * 1, 7)
+Platform(13, 6)
+Platform(14, 5)
+Enemy(14, 4)
 clock = pygame.time.Clock()
 attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
@@ -286,6 +325,7 @@ def main():
                 p.jcounter = 0
 
         if event.type == protect:
+            pygame.time.set_timer(protect, 0)
             p.chtex('player.png')
             p.protected = False
 
@@ -316,6 +356,10 @@ def main():
     screen.fill((150, 150, 150))
     p.update()
     d.update()
+    for e in enemies:
+        e.update()
+    flash.draw(screen)
+    enemies.draw(screen)
     health.draw(screen)
     danger.draw(screen)
     static.draw(screen)
@@ -327,7 +371,6 @@ while running:
     if not end:
         main()
     else:
-        pygame.time.delay(800)
         game_over()
     pygame.display.flip()
     clock.tick(60)
