@@ -254,6 +254,16 @@ class Dagger(pygame.sprite.Sprite):
         self.rect.y += y
 
 
+class Hand(pygame.sprite.Sprite):
+    def __init__(self, x, y, w, h, g):
+        super().__init__()
+        self.rect = pygame.Rect(x, y, w, h)
+        if pygame.sprite.spritecollideany(self, g):
+            self.a = True
+        else:
+            self.a = False
+
+
 class Enemy(Player):
     def __init__(self, x, y, im='enemy1'):
         super().__init__(x, y, False)
@@ -264,11 +274,18 @@ class Enemy(Player):
         self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
         enemies.add(self)
 
-    def take_damage(self, n):
+    def take_damage(self, n, fromplayer=True):
         self.hp -= n
         self.chtex(self.im + '-d.png')
         self.timer = 20
-        self.jump()
+        self.jump(fromplayer)
+
+    def jump(self, fromplayer=True):
+        self.todo[0] = [[(0, -20), self.move] for i in range(14)]
+        if fromplayer:
+            v = p.view * 2
+            self.todo[1] = [[(v, 0), self.move] for i in range(14)]
+            self.j = False
 
     def update(self):
         self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
@@ -281,13 +298,16 @@ class Enemy(Player):
         if self.hp <= 0:
             self.todo[0].insert(1, [(), self.kill])
         if pygame.sprite.spritecollideany(self, danger):
-            self.take_damage(3)
+            self.take_damage(3, False)
         if ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[0] - p.mid[0]) ** 2) ** 0.5 <= 600:
             if p.mid < self.mid:
-                self.move(-4, 0)
+                h = Hand(self.rect.x - 50, self.rect.y - 100, 50, 280, danger)
+                if not h.a:
+                    self.move(-4, 0)
             else:
-                self.move(4, 0)
-
+                h = Hand(self.rect.x + self.rect[2], self.rect.y - 100, 50, 280, danger)
+                if not h.a:
+                    self.move(4, 0)
 
 
 end = False
@@ -317,7 +337,7 @@ attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
 protect = pygame.USEREVENT + 2
 smth = pygame.USEREVENT + 3
-pygame.time.set_timer(smth, 1500)
+pygame.time.set_timer(smth, 1000)
 
 
 def main():
