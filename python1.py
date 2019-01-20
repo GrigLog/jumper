@@ -1,6 +1,7 @@
 import pygame
 import os
 import ctypes
+from random import randint, choice
 
 
 w, h = ctypes.windll.user32.GetSystemMetrics(0),\
@@ -52,6 +53,7 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = int(x * 100) + 25, int(y * 100)
         self.view = 1
+        self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
         self.st = ''
         self.j = False
         self.sh = True
@@ -68,9 +70,12 @@ class Player(pygame.sprite.Sprite):
         pp.add(self)
 
     def update(self):
+        self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
         self.fall()
         self.do()
         if pygame.sprite.spritecollideany(self, danger):
+            self.take_damage()
+        if pygame.sprite.spritecollideany(self, enemies):
             self.take_damage()
         pp.draw(screen)
 
@@ -195,7 +200,7 @@ class Flash(pygame.sprite.Sprite):
         coll = pygame.sprite.groupcollide(flash, enemies, False, False)
         if coll:
             for e in coll[self]:
-                e.damage(5)
+                e.take_damage(5)
 
     def destroy(self):
         self.kill()
@@ -256,23 +261,32 @@ class Enemy(Player):
         self.image = pygame.transform.scale(load_image(im + '.png'), (50, 80))
         self.hp = 10
         self.timer = 0
+        self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
         enemies.add(self)
 
-    def damage(self, n):
+    def take_damage(self, n):
         self.hp -= n
         self.chtex(self.im + '-d.png')
         self.timer = 20
+        self.jump()
 
     def update(self):
+        self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
         self.fall()
+        self.do()
         if self.timer:
             self.timer -= 1
             if self.timer == 0:
                 self.chtex(self.im + '.png')
         if self.hp <= 0:
-            self.kill()
-
-
+            self.todo[0].insert(1, [(), self.kill])
+        if pygame.sprite.spritecollideany(self, danger):
+            self.take_damage(3)
+        if ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[0] - p.mid[0]) ** 2) ** 0.5 <= 600:
+            if p.mid < self.mid:
+                self.move(-4, 0)
+            else:
+                self.move(4, 0)
 
 
 
@@ -302,6 +316,8 @@ clock = pygame.time.Clock()
 attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
 protect = pygame.USEREVENT + 2
+smth = pygame.USEREVENT + 3
+pygame.time.set_timer(smth, 1500)
 
 
 def main():
@@ -338,6 +354,9 @@ def main():
 
         if event.type == attacking:
             d.a = True
+
+        if event.type == smth:
+            Enemy(choice([0, 1, 2, 13, 14]), 0)
 
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         p.move(-8, 0)
