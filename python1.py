@@ -129,8 +129,8 @@ class Player(pygame.sprite.Sprite):
             self.chtex('player2.png')
             self.hp.remove(1)
             self.protected = True
+            self.jump()
         self.sh = True
-        self.jump()
 
     def chtex(self, image):
         self.image = pygame.transform.scale(load_image(image), (50, 80))
@@ -162,7 +162,7 @@ class Health:
         health.remove(health.sprites()[-1])
         if self.n <= 0:
             end = True
-            pygame.time.delay(800)
+            p.todo[1].append([(800), pygame.time.delay])
 
     def add(self, c=1):
         self.n += c
@@ -215,7 +215,7 @@ class Flash(pygame.sprite.Sprite):
         coll = pygame.sprite.groupcollide(flash, enemies, False, False)
         if coll:
             for e in coll[self]:
-                e.take_damage(5)
+                e.take_damage(4)
 
     def destroy(self):
         self.kill()
@@ -330,7 +330,7 @@ class Enemy(Player):
             self.todo[0].insert(1, [(), self.kill])
         if pygame.sprite.spritecollideany(self, danger):
             self.take_damage(3, False)
-        if ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[0] - p.mid[0]) ** 2) ** 0.5 <= 600:
+        if ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[0] - p.mid[0]) ** 2) ** 0.5 <= 1000:
             if p.mid < self.mid:
                 h = Hand(self.rect.x - 50, self.rect.y - 100, 50, 280, danger)
                 if not h.a:
