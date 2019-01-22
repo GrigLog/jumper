@@ -25,6 +25,9 @@ def load_image(name, colorkey=None):
 def game_over():
     global running
     for event in pygame.event.get():
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
         if event.type == pygame.QUIT:
             running = False
     screen.fill((0, 0, 0))
@@ -78,7 +81,6 @@ class Player(pygame.sprite.Sprite):
             self.take_damage()
         if pygame.sprite.spritecollideany(self, enemies):
             self.take_damage()
-        pp.draw(screen)
 
     def do(self):
         if self.todo != [[], []]:
@@ -216,6 +218,8 @@ class Flash(pygame.sprite.Sprite):
         if coll:
             for e in coll[self]:
                 e.take_damage(4)
+                if p.vert == -1:
+                    p.jump()
 
     def destroy(self):
         self.kill()
@@ -309,7 +313,8 @@ class Enemy(Player):
         self.hp -= n
         self.chtex(self.im + '-d.png')
         self.timer = 20
-        self.jump(fromplayer)
+        if p.vert != -1:
+            self.jump(fromplayer)
 
     def jump(self, fromplayer=True):
         self.todo[0] = [[(0, -20), self.move] for i in range(14)]
@@ -330,6 +335,11 @@ class Enemy(Player):
             self.todo[0].insert(1, [(), self.kill])
         if pygame.sprite.spritecollideany(self, danger):
             self.take_damage(3, False)
+
+
+class Chaser(Enemy):
+    def update(self):
+        super().update()
         if ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[0] - p.mid[0]) ** 2) ** 0.5 <= 1000:
             if p.mid < self.mid:
                 h = Hand(self.rect.x - 50, self.rect.y - 100, 50, 280, danger)
@@ -348,7 +358,7 @@ font1 = pygame.font.Font('data/Samson.ttf', 100)
 font2 = pygame.font.Font('data/Samson.ttf', 50)
 running = True
 size = w, h
-screen = pygame.display.set_mode(size)
+screen = pygame.display.set_mode(size, pygame.FULLSCREEN)
 ss, stairs, pp, danger, bg, health, buttons, enemies, flash = [pygame.sprite.Group() for i in range(9)]
 static = pygame.sprite.Group()
 p = Player(0, 0)
@@ -356,27 +366,29 @@ d = Dagger()
 Platform(2, 3)
 Platform(0, 3)
 for i in range(10):
-    Spike(3 + 1 * i, 3.5)
-    Platform(3 + 1 * i, 4)
+    Platform(3 + 1 * i, 3.5)
 for i in range(20):
     Platform(i * 1, 7)
 Platform(13, 6)
 Platform(14, 5)
-Enemy(14, 4)
+Chaser(14, 4)
 clock = pygame.time.Clock()
 attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
 protect = pygame.USEREVENT + 2
 smth = pygame.USEREVENT + 3
-pygame.time.set_timer(smth, 400)
+pygame.time.set_timer(smth, 1000)
 
 
 def main():
     global running, cell
+    p.update()
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
             if pygame.key.get_pressed()[pygame.K_LSHIFT]:
                 p.shift()
             if pygame.key.get_pressed()[pygame.K_SPACE]:
@@ -393,7 +405,6 @@ def main():
             if event.key in [pygame.K_UP, pygame.K_DOWN]:
                 p.vert = 0
 
-
         if event.type == protect:
             pygame.time.set_timer(protect, 0)
             p.chtex('player.png')
@@ -408,9 +419,6 @@ def main():
 
         if event.type == attacking:
             d.a = True
-
-        if event.type == smth:
-            Enemy(randint(0, 14), 0)
 
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         p.move(-8, 0)
@@ -429,10 +437,10 @@ def main():
             p.move(0, -20)
 
     screen.fill((150, 150, 150))
-    p.update()
     d.update()
     for e in enemies:
         e.update()
+    pp.draw(screen)
     flash.draw(screen)
     enemies.draw(screen)
     health.draw(screen)
