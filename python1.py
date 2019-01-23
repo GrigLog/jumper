@@ -1,7 +1,10 @@
 import pygame
 import os
 import ctypes
-from random import randint, choice
+from threading import Timer
+from random import randint, choice as ch
+from math import sin, cos
+import math
 
 
 w, h = ctypes.windll.user32.GetSystemMetrics(0),\
@@ -25,6 +28,9 @@ def load_image(name, colorkey=None):
 def game_over():
     global running
     for event in pygame.event.get():
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
         if event.type == pygame.QUIT:
             running = False
     screen.fill((0, 0, 0))
@@ -49,21 +55,21 @@ class Button(pygame.sprite.Sprite):
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y, main=True):
         super().__init__()
-        self.image = pygame.transform.scale(load_image('player.png'), (50, 80))
-        self.rect = self.image.get_rect()
+        if main:
+            self.player_init()
         self.rect.x, self.rect.y = int(x * 100) + 25, int(y * 100)
         self.view = 1
-        self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
+        self.mid = [self.rect.x + self.rect[2] / 2, self.rect.y + self.rect[3] / 2]
         self.st = ''
         self.j = False
         self.sh = True
         self.jcounter = 0
         self.todo = [[], []]
-        if main:
-            self.player_init()
 
     def player_init(self):
         global pp
+        self.image = pygame.transform.scale(load_image('player.png'), (50, 80))
+        self.rect = self.image.get_rect()
         self.vert = 0
         self.hp = Health(3)
         self.protected = False
@@ -78,7 +84,6 @@ class Player(pygame.sprite.Sprite):
             self.take_damage()
         if pygame.sprite.spritecollideany(self, enemies):
             self.take_damage()
-        pp.draw(screen)
 
     def do(self):
         if self.todo != [[], []]:
@@ -121,7 +126,10 @@ class Player(pygame.sprite.Sprite):
     def shift(self):
         if self.sh:
             self.sh = False
-            self.todo[0] = [[(50 * self.view, 0), self.move] for i in range(4)]
+            if self.vert != 1:
+                self.todo[0] = [[(50 * self.view, 0), self.move] for i in range(4)]
+            else:
+                self.todo[0] = [[(0, -60), self.move] for i in range(4)]
 
     def take_damage(self):
         if not self.protected:
@@ -133,7 +141,7 @@ class Player(pygame.sprite.Sprite):
         self.sh = True
 
     def chtex(self, image):
-        self.image = pygame.transform.scale(load_image(image), (50, 80))
+        self.image = pygame.transform.scale(load_image(image), (self.rect[2], self.rect[3]))
         if self.view == -1:
             self.image = pygame.transform.flip(self.image, True, False)
 
@@ -147,7 +155,8 @@ class Hitpoint(pygame.sprite.Sprite):
         super().__init__(health)
         self.image = pygame.transform.scale(load_image('hp.png'), (60, 51))
         self.rect = self.image.get_rect()
-        self.rect.x = 70 * n
+        self.rect.y = 10
+        self.rect.x = 70 * n + 10
 
 
 class Health:
@@ -210,12 +219,15 @@ class Flash(pygame.sprite.Sprite):
                 self.rect.x -= 20
             else:
                 self.rect.x += 5
-        pygame.time.set_timer(flasht, 100)
-        pygame.event.post(pygame.event.Event(flasht, {'cell': self}))
+
+        self.rect[2], self.rect[3] = self.rect[2] + 10, self.rect[3] + 10
+        Timer(0.1, self.destroy).start()
         coll = pygame.sprite.groupcollide(flash, enemies, False, False)
         if coll:
             for e in coll[self]:
                 e.take_damage(4)
+                if p.vert == -1:
+                    p.jump()
 
     def destroy(self):
         self.kill()
@@ -229,6 +241,7 @@ class Dagger(pygame.sprite.Sprite):
         super().__init__(dd)
         self.image = pygame.transform.scale(load_image('dagger.png'), (128, 12))
         self.a = True
+        self.damage = 3
         self.dirty = 0
         self.rect = self.image.get_rect()
         self.rect.x = p.rect.x + 18 + 18 * p.view
@@ -280,10 +293,6 @@ class Dagger(pygame.sprite.Sprite):
         if p.view == -1:
             self.image = pygame.transform.flip(self.image, True, False)
 
-    def move(self, x, y):
-        self.rect.x += x
-        self.rect.y += y
-
 
 class Hand(pygame.sprite.Sprite):
     def __init__(self, x, y, w, h, g):
@@ -296,20 +305,22 @@ class Hand(pygame.sprite.Sprite):
 
 
 class Enemy(Player):
-    def __init__(self, x, y, im='enemy1'):
-        super().__init__(x, y, False)
+    def __init__(self, x, y, w, h, im):
         self.im = im
-        self.image = pygame.transform.scale(load_image(im + '.png'), (50, 80))
+        self.image = pygame.transform.scale(load_image(self.im + '.png'), (w, h))
+        self.rect = self.image.get_rect()
+        super().__init__(x, y, False)
         self.hp = 10
         self.timer = 0
-        self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
+        self.mid = [self.rect.x + self.rect[2] / 2, self.rect.y + self.rect[3] / 2]
         enemies.add(self)
 
     def take_damage(self, n, fromplayer=True):
         self.hp -= n
         self.chtex(self.im + '-d.png')
         self.timer = 20
-        self.jump(fromplayer)
+        if p.vert != -1:
+            self.jump(fromplayer)
 
     def jump(self, fromplayer=True):
         self.todo[0] = [[(0, -20), self.move] for i in range(14)]
@@ -319,7 +330,7 @@ class Enemy(Player):
             self.j = False
 
     def update(self):
-        self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
+        self.mid = [self.rect.x + self.rect[2] / 2, self.rect.y + self.rect[3] / 2]
         self.fall()
         self.do()
         if self.timer:
@@ -329,7 +340,15 @@ class Enemy(Player):
         if self.hp <= 0:
             self.todo[0].insert(1, [(), self.kill])
         if pygame.sprite.spritecollideany(self, danger):
-            self.take_damage(3, False)
+            self.take_damage(d.damage, False)
+
+
+class Chaser(Enemy):
+    def __init__(self, x, y, im='enemy1'):
+        super().__init__(x, y, 50, 80, im)
+
+    def update(self):
+        super().update()
         if ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[0] - p.mid[0]) ** 2) ** 0.5 <= 1000:
             if p.mid < self.mid:
                 h = Hand(self.rect.x - 50, self.rect.y - 100, 50, 280, danger)
@@ -339,6 +358,64 @@ class Enemy(Player):
                 h = Hand(self.rect.x + self.rect[2], self.rect.y - 100, 50, 280, danger)
                 if not h.a:
                     self.move(4, 0)
+
+
+class Shooter(Enemy):
+    def __init__(self, x, y):
+        super().__init__(x, y, 60, 70, 'enemy2')
+        self.t = Timer(2, self.attack)
+        self.t.start()
+
+    def update(self):
+        super().update()
+        self.v = ch([[1.4, 0], [-1.4, 0], [0, 1.4], [0, -1.4], [1, 1], [1, -1], [-1, 1], [-1, 1]])
+        self.move(self.v[0], 0)
+        self.move(0, self.v[1])
+
+    def attack(self):
+        d = ((self.mid[0] - p.mid[0])**2 + (self.mid[1] - p.mid[1])**2)**0.5
+        Fireball(self.mid[0] / 100, self.mid[1] / 100, (p.mid[1] - self.mid[1]) / d, (p.mid[0] - self.mid[0]) / d)
+        self.t = Timer(2, self.attack)
+        self.t.start()
+
+    def jump(self, fromplayer=True):
+        pass
+
+    def fall(self):
+        pass
+
+    def kill(self):
+        super().kill()
+        self.t.cancel()
+
+
+class Fireball(Enemy):
+    def __init__(self, x, y, sina, cosa):
+        super().__init__(x, y, 70, 42, 'fireball')
+        self.sina, self.cosa = sina, cosa
+        a = math.acos(cosa) * 57.3
+        if sina < 0:
+            a = -a
+        self.image = pygame.transform.rotate(self.image, -a)
+
+    def take_damage(self, n):
+        pass
+
+    def fall(self):
+        pass
+
+    def jump(self):
+        pass
+
+    def update(self):
+        self.move(self.cosa * 8, 0)
+        self.move(0, self.sina * 8)
+
+    def move(self, x, y):
+        self.rect.x += x
+        self.rect.y += y
+
+
 
 
 end = False
@@ -356,27 +433,33 @@ d = Dagger()
 Platform(2, 3)
 Platform(0, 3)
 for i in range(10):
-    Spike(3 + 1 * i, 3.5)
-    Platform(3 + 1 * i, 4)
+    Platform(3 + 1 * i, 3.5)
 for i in range(20):
     Platform(i * 1, 7)
 Platform(13, 6)
 Platform(14, 5)
-Enemy(14, 4)
+Shooter(14, 4)
 clock = pygame.time.Clock()
 attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
 protect = pygame.USEREVENT + 2
 smth = pygame.USEREVENT + 3
-pygame.time.set_timer(smth, 400)
+pygame.time.set_timer(smth, 1000)
 
 
 def main():
     global running, cell
+    p.update()
+    if pygame.key.get_pressed()[pygame.K_UP]:
+        p.vert = 1
+    if pygame.key.get_pressed()[pygame.K_DOWN]:
+        p.vert = -1
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
             if pygame.key.get_pressed()[pygame.K_LSHIFT]:
                 p.shift()
             if pygame.key.get_pressed()[pygame.K_SPACE]:
@@ -393,33 +476,18 @@ def main():
             if event.key in [pygame.K_UP, pygame.K_DOWN]:
                 p.vert = 0
 
-
         if event.type == protect:
             pygame.time.set_timer(protect, 0)
             p.chtex('player.png')
             p.protected = False
 
-        if event.type == flasht:
-            if 'cell' in event.__dict__:
-                cell = event.cell
-            else:
-                cell.destroy()
-                pygame.time.set_timer(flasht, 0)
-
         if event.type == attacking:
             d.a = True
-
-        if event.type == smth:
-            Enemy(randint(0, 14), 0)
 
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         p.move(-8, 0)
     if pygame.key.get_pressed()[pygame.K_RIGHT]:
         p.move(8, 0)
-    if pygame.key.get_pressed()[pygame.K_UP]:
-        p.vert = 1
-    if pygame.key.get_pressed()[pygame.K_DOWN]:
-        p.vert = -1
     if pygame.key.get_pressed()[pygame.K_SPACE]:
         if p.st == 'j':
             p.jcounter += 1
@@ -429,10 +497,10 @@ def main():
             p.move(0, -20)
 
     screen.fill((150, 150, 150))
-    p.update()
     d.update()
     for e in enemies:
         e.update()
+    pp.draw(screen)
     flash.draw(screen)
     enemies.draw(screen)
     health.draw(screen)
@@ -449,3 +517,4 @@ while running:
         game_over()
     pygame.display.flip()
     clock.tick(60)
+pygame.quit()
