@@ -54,7 +54,7 @@ class Button(pygame.sprite.Sprite):
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y, main=True):
-        super().__init__()
+        super().__init__(glb)
         if main:
             self.player_init()
         self.rect.x, self.rect.y = int(x * 100) + 25, int(y * 100)
@@ -140,10 +140,17 @@ class Player(pygame.sprite.Sprite):
             self.jump()
         self.sh = True
 
-    def chtex(self, image):
-        self.image = pygame.transform.scale(load_image(image), (self.rect[2], self.rect[3]))
+    def chtex(self, image, w=False, h=False):
+        if type(image) == list:
+            image = ''.join(image)
+        if not w:
+            w, h = self.rect[2], self.rect[3]
+        self.image = pygame.transform.scale(load_image(image), (w, h))
         if self.view == -1:
             self.image = pygame.transform.flip(self.image, True, False)
+        self.rect.y += self.rect.h - h
+        self.rect.w, self.rect.h = w, h
+
 
     def fall(self):
         if self.st != 's':
@@ -152,7 +159,7 @@ class Player(pygame.sprite.Sprite):
 
 class Hitpoint(pygame.sprite.Sprite):
     def __init__(self, n):
-        super().__init__(health)
+        super().__init__(health, glb)
         self.image = pygame.transform.scale(load_image('hp.png'), (60, 51))
         self.rect = self.image.get_rect()
         self.rect.y = 10
@@ -180,7 +187,7 @@ class Health:
 
 class Platform(pygame.sprite.Sprite):
     def __init__(self, x, y):
-        super().__init__(static)
+        super().__init__(static, glb)
         self.image = pygame.transform.scale(load_image('bricks.png'), (100, 100))
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = int(x * 100), int(y * 100)
@@ -188,7 +195,7 @@ class Platform(pygame.sprite.Sprite):
 
 class Spike(pygame.sprite.Sprite):
     def __init__(self, x, y):
-        super().__init__(danger)
+        super().__init__(danger, glb)
         self.image = pygame.transform.scale(load_image('spikes.png'), (100, 54))
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = int(x * 100), int(y * 100)
@@ -198,7 +205,7 @@ class Spike(pygame.sprite.Sprite):
 class Flash(pygame.sprite.Sprite):
     def __init__(self, x, y, rev):
         global flasht
-        super().__init__(flash)
+        super().__init__(flash, glb)
         self.image = pygame.transform.scale(load_image('flash.png'), (192, 45))
         if p.vert == 1:
             self.image = pygame.transform.rotate(self.image, 90)
@@ -416,6 +423,56 @@ class Fireball(Enemy):
         self.rect.y += y
 
 
+class Jumper(Enemy):
+    def __init__(self, x, y, im='enemy3'):
+        super().__init__(x, y, 42, 78, im)
+        self.t = Timer(2, self.customjump)
+        self.t.start()
+        self.t2 = Timer(1.7, self.chtex, args=[self.im + '-s.png', 42, 48])
+        self.t2.start()
+
+    def update(self):
+        super().update()
+        if self.st == '':
+            self.move(5 * self.view, 0)
+
+    def customjump(self):
+        self.chtex(self.im + '.png', 42, 78)
+        self.st = ''
+        self.todo[0] = [[(0, -35 + i), self.move] for i in range(randint(14, 17))]
+        if self.mid[0] - p.mid[0] > 0:
+            self.view = -1
+        else:
+            self.view = 1
+        self.t = Timer(2, self.customjump)
+        self.t.start()
+        self.t2 = Timer(1.7, self.chtex, args=[self.im + '-s.png', 42, 58])
+        self.t2.start()
+
+    def move(self, x, y):
+        if self.view == 1 and x < 0:
+            self.image = pygame.transform.flip(self.image, True, False)
+            self.view = -1
+        if self.view == -1 and x > 0:
+            self.image = pygame.transform.flip(self.image, True, False)
+            self.view = 1
+        self.rect.x += x
+        self.rect.y += y
+        obj = pygame.sprite.spritecollideany(self, static)
+        if obj:
+            if x > 0:
+                self.rect.x = obj.rect.x - self.rect[2] - 1
+            elif x < 0:
+                self.rect.x = obj.rect.x + obj.rect[2] + 1
+            elif y > 0:
+                self.st = 's'
+                self.rect.y = obj.rect.y - self.rect[3] - 1
+            elif y < 0:
+                self.st = ''
+                self.rect.y = obj.rect.y + obj.rect[3] + 1
+        else:
+            if self.st != 'j':
+                self.st = ''
 
 
 end = False
@@ -427,6 +484,7 @@ running = True
 size = w, h
 screen = pygame.display.set_mode(size)
 ss, stairs, pp, danger, bg, health, buttons, enemies, flash = [pygame.sprite.Group() for i in range(9)]
+glb = pygame.sprite.LayeredUpdates()
 static = pygame.sprite.Group()
 p = Player(0, 0)
 d = Dagger()
@@ -438,7 +496,7 @@ for i in range(20):
     Platform(i * 1, 7)
 Platform(13, 6)
 Platform(14, 5)
-Shooter(14, 4)
+Jumper(14, 4)
 clock = pygame.time.Clock()
 attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
@@ -496,17 +554,11 @@ def main():
                 p.st = ''
             p.move(0, -20)
 
-    screen.fill((150, 150, 150))
-    d.update()
     for e in enemies:
         e.update()
-    pp.draw(screen)
-    flash.draw(screen)
-    enemies.draw(screen)
-    health.draw(screen)
-    danger.draw(screen)
-    static.draw(screen)
-    bg.draw(screen)
+    screen.fill((150, 150, 150))
+    glb.draw(screen)
+    d.update()
     buttons.draw(screen)
 
 
