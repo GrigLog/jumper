@@ -24,38 +24,6 @@ def load_image(name, colorkey=None):
     return image
 
 
-def game_over():
-    global running, menumode, c, cc, sel, btns
-    if not menumode:
-        btns = [Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 100, 60, 'YES!', game_restart),
-                   Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 100, 60, 'EXIT', None)]
-        cc = pygame.sprite.Group()
-        c = LCursor()
-        sel = 0
-        c.replace(btns[sel])
-        menumode = True
-
-    for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                running = False
-            if event.key in [pygame.K_LEFT, pygame.K_RIGHT]:
-                sel += 1
-                sel = sel % 2
-                c.replace(btns[sel])
-            if event.key == pygame.K_ENTER:
-                btns[sel].activate()
-        if event.type == pygame.QUIT:
-            running = False
-    screen.fill((0, 0, 0))
-    screen.blit(font1.render('GAME OVER.', False, (255, 0, 0)), ((w - 500) // 2, (h - 200) // 2 - 200))
-    screen.blit(font1.render('RESTART?', False, (255, 255, 255)), ((w - 500) // 2 + 10, (h - 200) // 2 - 100))
-    cc.draw(screen)
-    buttons.draw(screen)
-    for e in btns:
-        e.update()
-
-
 class LCursor(pygame.sprite.Sprite):
     def __init__(self):
         global cc
@@ -86,22 +54,29 @@ class RCursor(pygame.sprite.Sprite):
 
 
 class Button(pygame.sprite.Sprite):
-    def __init__(self, x, y, w, h, text, func, font=None):
+    def __init__(self, x, y, text, func, params=None, font=None):
         super().__init__(buttons)
+        self.text = text
+        if font is None:
+            self.font = font2
+        w, h = self.font.render(self.text, False, (255, 255, 255)).get_size()
         self.image = pygame.Surface((w, h), pygame.SRCALPHA)
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = x - 5, y
         # pygame.draw.rect(self.image, (255, 255, 255), pygame.Rect(0, 0, w, h), 5)
-        self.text = text
-        if font is None:
-            self.font = font2
         self.func = func
+        self.params = params
 
     def update(self):
         screen.blit(self.font.render(self.text, False, (255, 255, 255)), (self.rect.x, self.rect.y))
 
     def activate(self):
-        self.func()
+        if self.params is None:
+            self.func()
+        elif type(self.params) == list:
+            self.func(*self.params)
+        else:
+            self.func(self.params)
 
 
 class Player(pygame.sprite.Sprite):
@@ -123,7 +98,7 @@ class Player(pygame.sprite.Sprite):
         self.image = pygame.transform.scale(load_image('player.png'), (50, 80))
         self.rect = self.image.get_rect()
         self.vert = 0
-        self.hp = Health(3)
+        self.hp = Health(5)
         self.protected = False
         pp = pygame.sprite.Group()
         pp.add(self)
@@ -134,8 +109,10 @@ class Player(pygame.sprite.Sprite):
         self.do()
         if pygame.sprite.spritecollideany(self, danger):
             self.take_damage()
-        if pygame.sprite.spritecollideany(self, enemies):
-            self.take_damage()
+        obj = pygame.sprite.spritecollideany(self, enemies)
+        if obj:
+            if pygame.sprite.collide_mask(self, obj):
+                self.take_damage()
 
     def do(self):
         if self.todo != [[], []]:
@@ -185,6 +162,7 @@ class Player(pygame.sprite.Sprite):
 
     def take_damage(self):
         if not self.protected:
+            self.st = ''
             pygame.time.set_timer(protect, 2000)
             self.chtex('player2.png')
             self.hp.remove(1)
@@ -366,6 +344,7 @@ class Enemy(Player):
     def __init__(self, x, y, w, h, im):
         self.im = im
         self.image = pygame.transform.scale(load_image(self.im + '.png'), (w, h))
+        self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect()
         super().__init__(x, y, False)
         self.hp = 10
@@ -407,18 +386,18 @@ class Chaser(Enemy):
 
     def update(self):
         super().update()
-        if ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[0] - p.mid[0]) ** 2) ** 0.5 <= 1000:
-            if p.mid < self.mid:
-                h = Hand(self.rect.x - 50, self.rect.y - 100, 50, 280, danger)
-                if not h.a:
-                    self.move(-4, 0)
-            else:
-                h = Hand(self.rect.x + self.rect[2], self.rect.y - 100, 50, 280, danger)
-                if not h.a:
-                    self.move(4, 0)
+        if self.st != '':
+            if ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[0] - p.mid[0]) ** 2) ** 0.5 <= 1000:
+                if p.mid < self.mid:
+                    h = Hand(self.rect.x - 50, self.rect.y - 100, 50, 280, danger)
+                    if not h.a:
+                        self.move(-4, 0)
+                else:
+                    h = Hand(self.rect.x + self.rect[2], self.rect.y - 100, 50, 280, danger)
+                    if not h.a:
+                        self.move(4, 0)
 
     def jump(self, fromplayer=True):
-        print('-')
         self.todo[0] = [[(0, -20), self.move] for i in range(14)]
         if fromplayer:
             v = p.view * 6
@@ -441,7 +420,12 @@ class Shooter(Enemy):
 
     def attack(self):
         d = ((self.mid[0] - p.mid[0])**2 + (self.mid[1] - p.mid[1])**2)**0.5
-        Fireball(self.mid[0] / 100, self.mid[1] / 100, (p.mid[1] - self.mid[1]) / d, (p.mid[0] - self.mid[0]) / d)
+        sina = (p.mid[1] - self.mid[1]) / d
+        cosa = (p.mid[0] - self.mid[0]) / d
+        a = math.acos(cosa) * 57.3
+        if sina < 0:
+            a = -a
+        Fireball(self.mid[0] / 100 - 0.35, self.mid[1] / 100 - 0.2, a)
         self.t = Timer(2, self.attack)
         self.t.start()
 
@@ -457,12 +441,9 @@ class Shooter(Enemy):
 
 
 class Fireball(Enemy):
-    def __init__(self, x, y, sina, cosa):
+    def __init__(self, x, y, a):
         super().__init__(x, y, 70, 42, 'fireball')
-        self.sina, self.cosa = sina, cosa
-        a = math.acos(cosa) * 57.3
-        if sina < 0:
-            a = -a
+        self.sina, self.cosa = sin(a / 57.3), cos(a / 57.3)
         self.image = pygame.transform.rotate(self.image, -a)
 
     def take_damage(self, n):
@@ -535,10 +516,70 @@ class Jumper(Enemy):
                 self.st = ''
 
 
+def change_list(n):
+    global btns, c, texts
+    if n == 0:
+        btns = [Button(w // 2 - 150, h // 5 - 30, 'Select stage', change_list, 1),
+                Button(w // 2 - 100, h // 5 * 2 - 30, 'Settings', change_list, 2)]
+
+        def texts():
+            pass
+
+    elif n == 1:
+        btns = [Button(w // 5, h // 2 - 30, '1', game_restart)]
+
+        def texts():
+            pass
+    c.replace(btns[0])
+
+
+def game_over():
+    global running, menumode, c, cc, sel, btns, texts
+    if not menumode:
+        btns = [Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 'YES!', game_restart),
+                   Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 'EXIT', change_list, 0)]
+        cc = pygame.sprite.Group()
+        c = LCursor()
+        sel = 0
+        c.replace(btns[sel])
+        menumode = True
+        def texts():
+            screen.blit(font1.render('GAME OVER.', False, (255, 0, 0)), ((w - 500) // 2, (h - 200) // 2 - 200))
+            screen.blit(font1.render('RESTART?', False, (255, 255, 255)), ((w - 500) // 2 + 10, (h - 200) // 2 - 100))
+
+    for event in pygame.event.get():
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
+            if event.key in [pygame.K_DOWN, pygame.K_RIGHT]:
+                sel += 1
+                sel = sel % len(btns)
+                c.replace(btns[sel])
+            if event.key in [pygame.K_UP, pygame.K_LEFT]:
+                sel -= 1
+                sel = sel % len(btns)
+                c.replace(btns[sel])
+            if event.key == 13:
+                btns[sel].activate()
+        if event.type == pygame.QUIT:
+            running = False
+    screen.fill((0, 0, 0))
+    texts()
+    cc.draw(screen)
+    buttons.draw(screen)
+    for e in btns:
+        e.update()
+
+
 def game_restart():
+    global glb, enemies
     menumode = False
     end = False
     running = True
+    for e in glb:
+        e.kill()
+    for e in enemies:
+        print('-')
     ss, stairs, pp, danger, bg, health, buttons, enemies, flash, static = [pygame.sprite.Group() for i in range(10)]
     glb = pygame.sprite.LayeredUpdates()
     globals().update(locals())
@@ -637,7 +678,7 @@ def main():
     if pygame.key.get_pressed()[pygame.K_RIGHT]:
         p.move(8, 0)
     if pygame.key.get_pressed()[pygame.K_SPACE]:
-        if p.st == 'j':
+        if p.st == 'j' and not(p.todo[0]):
             p.jcounter += 1
             if p.jcounter > 30:
                 p.jcounter = 0
