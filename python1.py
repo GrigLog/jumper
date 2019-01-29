@@ -16,7 +16,6 @@ def load_image(name, colorkey=None):
     try:
         image = pygame.image.load(fullname).convert_alpha()
     except pygame.error as message:
-        print('Cannot load image:', name)
         raise SystemExit(message)
     if colorkey is not None:
         if colorkey is -1:
@@ -26,30 +25,83 @@ def load_image(name, colorkey=None):
 
 
 def game_over():
-    global running
+    global running, menumode, c, cc, sel, btns
+    if not menumode:
+        btns = [Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 100, 60, 'YES!', game_restart),
+                   Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 100, 60, 'EXIT', None)]
+        cc = pygame.sprite.Group()
+        c = LCursor()
+        sel = 0
+        c.replace(btns[sel])
+        menumode = True
+
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 running = False
+            if event.key in [pygame.K_LEFT, pygame.K_RIGHT]:
+                sel += 1
+                sel = sel % 2
+                c.replace(btns[sel])
+            if event.key == pygame.K_ENTER:
+                btns[sel].activate()
         if event.type == pygame.QUIT:
             running = False
     screen.fill((0, 0, 0))
-    Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 100, 60, 'YES!')
-    Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 100, 60, 'EXIT')
     screen.blit(font1.render('GAME OVER.', False, (255, 0, 0)), ((w - 500) // 2, (h - 200) // 2 - 200))
     screen.blit(font1.render('RESTART?', False, (255, 255, 255)), ((w - 500) // 2 + 10, (h - 200) // 2 - 100))
+    cc.draw(screen)
     buttons.draw(screen)
+    for e in btns:
+        e.update()
+
+
+class LCursor(pygame.sprite.Sprite):
+    def __init__(self):
+        global cc
+        super().__init__(cc)
+        self.image = load_image('cursor.png')
+        self.image = pygame.transform.scale(self.image, (50, 50))
+        self.rect = self.image.get_rect()
+        self.rc = RCursor()
+
+    def replace(self, b):
+        self.rect.x = b.rect.x - 60
+        self.rect.y = b.rect.y
+        self.rc.replace(b)
+
+
+class RCursor(pygame.sprite.Sprite):
+    def __init__(self):
+        global cc
+        super().__init__(cc)
+        self.image = load_image('cursor.png')
+        self.image = pygame.transform.scale(self.image, (50, 50))
+        self.image = pygame.transform.flip(self.image, True, False)
+        self.rect = self.image.get_rect()
+
+    def replace(self, b):
+        self.rect.x = b.rect.x + b.rect.w + 10
+        self.rect.y = b.rect.y
 
 
 class Button(pygame.sprite.Sprite):
-    def __init__(self, x, y, w, h, text, font=None):
+    def __init__(self, x, y, w, h, text, func, font=None):
         super().__init__(buttons)
         self.image = pygame.Surface((w, h), pygame.SRCALPHA)
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = x - 5, y
-        pygame.draw.rect(self.image, (255, 255, 255), pygame.Rect(0, 0, w, h), 5)
+        # pygame.draw.rect(self.image, (255, 255, 255), pygame.Rect(0, 0, w, h), 5)
+        self.text = text
         if font is None:
-            screen.blit(font2.render(text, False, (255, 255, 255)), (x, y))
+            self.font = font2
+        self.func = func
+
+    def update(self):
+        screen.blit(self.font.render(self.text, False, (255, 255, 255)), (self.rect.x, self.rect.y))
+
+    def activate(self):
+        self.func()
 
 
 class Player(pygame.sprite.Sprite):
@@ -133,7 +185,7 @@ class Player(pygame.sprite.Sprite):
 
     def take_damage(self):
         if not self.protected:
-            pygame.time.set_timer(protect, 1000)
+            pygame.time.set_timer(protect, 2000)
             self.chtex('player2.png')
             self.hp.remove(1)
             self.protected = True
@@ -141,8 +193,6 @@ class Player(pygame.sprite.Sprite):
         self.sh = True
 
     def chtex(self, image, w=False, h=False):
-        if type(image) == list:
-            image = ''.join(image)
         if not w:
             w, h = self.rect[2], self.rect[3]
         self.image = pygame.transform.scale(load_image(image), (w, h))
@@ -174,11 +224,12 @@ class Health:
 
     def remove(self, c=1):
         global end
-        self.n -= c
-        health.remove(health.sprites()[-1])
-        if self.n <= 0:
-            end = True
-            p.todo[1].append([(800), pygame.time.delay])
+        for i in range(c):
+            self.n -= 1
+            health.sprites()[-1].kill()
+            if self.n <= 0:
+                end = True
+                p.todo[1].append([(800), pygame.time.delay])
 
     def add(self, c=1):
         self.n += c
@@ -285,7 +336,7 @@ class Dagger(pygame.sprite.Sprite):
     def attack(self):
         if self.a:
             self.draw()
-            pygame.time.set_timer(attacking, 300)
+            pygame.time.set_timer(attacking, 200)
             self.a = False
             if p.view == 1:
                 Flash(self.rect.x, self.rect.y, False)
@@ -366,10 +417,19 @@ class Chaser(Enemy):
                 if not h.a:
                     self.move(4, 0)
 
+    def jump(self, fromplayer=True):
+        print('-')
+        self.todo[0] = [[(0, -20), self.move] for i in range(14)]
+        if fromplayer:
+            v = p.view * 6
+            self.todo[1] = [[(v, 0), self.move] for i in range(14)]
+            self.j = False
+
 
 class Shooter(Enemy):
     def __init__(self, x, y):
         super().__init__(x, y, 60, 70, 'enemy2')
+        self.hp = 5
         self.t = Timer(2, self.attack)
         self.t.start()
 
@@ -475,34 +535,57 @@ class Jumper(Enemy):
                 self.st = ''
 
 
-end = False
+def game_restart():
+    menumode = False
+    end = False
+    running = True
+    ss, stairs, pp, danger, bg, health, buttons, enemies, flash, static = [pygame.sprite.Group() for i in range(10)]
+    glb = pygame.sprite.LayeredUpdates()
+    globals().update(locals())
+    p = Player(0, 0)
+    globals().update(locals())
+    d = Dagger()
+    attacking = pygame.USEREVENT
+    flasht = pygame.USEREVENT + 1
+    protect = pygame.USEREVENT + 2
+    smth = pygame.USEREVENT + 3
+    pygame.time.set_timer(smth, 3000)
+    for i in range(20):
+        Platform(i * 1, 7)
+    Platform(4, 5)
+    Platform(9, 5)
+    Platform(14, 5)
+    Jumper(14, 4)
+    globals().update(locals())
+
+
 pygame.init()
 pygame.font.init()
 font1 = pygame.font.Font('data/Samson.ttf', 100)
 font2 = pygame.font.Font('data/Samson.ttf', 50)
-running = True
 size = w, h
 screen = pygame.display.set_mode(size)
-ss, stairs, pp, danger, bg, health, buttons, enemies, flash = [pygame.sprite.Group() for i in range(9)]
-glb = pygame.sprite.LayeredUpdates()
-static = pygame.sprite.Group()
-p = Player(0, 0)
-d = Dagger()
-Platform(2, 3)
-Platform(0, 3)
-for i in range(10):
-    Platform(3 + 1 * i, 3.5)
-for i in range(20):
-    Platform(i * 1, 7)
-Platform(13, 6)
-Platform(14, 5)
-Jumper(14, 4)
+pygame.mouse.set_visible(False)
 clock = pygame.time.Clock()
+menumode = False
+end = False
+running = True
+ss, stairs, pp, danger, bg, health, buttons, enemies, flash, static = [pygame.sprite.Group() for i in range(10)]
+glb = pygame.sprite.LayeredUpdates()
+p = Player(0, 0)
+globals().update(locals())
+d = Dagger()
 attacking = pygame.USEREVENT
 flasht = pygame.USEREVENT + 1
 protect = pygame.USEREVENT + 2
 smth = pygame.USEREVENT + 3
-pygame.time.set_timer(smth, 1000)
+pygame.time.set_timer(smth, 3000)
+for i in range(20):
+    Platform(i * 1, 7)
+Platform(4, 5)
+Platform(9, 5)
+Platform(14, 5)
+Jumper(14, 4)
 
 
 def main():
@@ -542,6 +625,13 @@ def main():
         if event.type == attacking:
             d.a = True
 
+        if event.type == smth:
+            e = ch([Chaser, Shooter, Jumper])
+            if e != Shooter:
+                e(randint(0, 18), -1)
+            else:
+                e(randint(0, 18), 2)
+
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         p.move(-8, 0)
     if pygame.key.get_pressed()[pygame.K_RIGHT]:
@@ -549,7 +639,7 @@ def main():
     if pygame.key.get_pressed()[pygame.K_SPACE]:
         if p.st == 'j':
             p.jcounter += 1
-            if p.jcounter > 24:
+            if p.jcounter > 30:
                 p.jcounter = 0
                 p.st = ''
             p.move(0, -20)
