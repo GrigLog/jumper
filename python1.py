@@ -7,8 +7,9 @@ from math import sin, cos
 import math
 
 
-w, h = ctypes.windll.user32.GetSystemMetrics(0),\
-ctypes.windll.user32.GetSystemMetrics(1)
+'''w, h = ctypes.windll.user32.GetSystemMetrics(0),\
+ctypes.windll.user32.GetSystemMetrics(1)'''
+w, h = 1600, 900
 
 
 def load_image(name, colorkey=None):
@@ -79,6 +80,14 @@ class Button(pygame.sprite.Sprite):
             self.func(self.params)
 
 
+class Game_BackGround(pygame.sprite.Sprite):
+    def __init__(self):
+        global bg
+        super().__init__(bg)
+        self.image = pygame.transform.scale(load_image('columns.png'), (w, h))
+        self.rect = self.image.get_rect()
+
+
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y, main=True):
         super().__init__(glb)
@@ -98,7 +107,8 @@ class Player(pygame.sprite.Sprite):
         self.image = pygame.transform.scale(load_image('player.png'), (50, 80))
         self.rect = self.image.get_rect()
         self.vert = 0
-        self.hp = Health(5)
+        self.shifting = False
+        self.hp = Health(4)
         self.protected = False
         pp = pygame.sprite.Group()
         pp.add(self)
@@ -144,7 +154,7 @@ class Player(pygame.sprite.Sprite):
             elif y < 0:
                 self.rect.y = obj.rect.y + obj.rect[3] + 1
         else:
-            if self.st != 'j':
+            if self.st not in ['j', 'sh']:
                 self.st = ''
             self.j = False
 
@@ -182,7 +192,11 @@ class Player(pygame.sprite.Sprite):
 
     def fall(self):
         if self.st != 's':
-            self.move(0, 10)
+            if self.todo[0]:
+                if self.todo[0][0][0][0] == 0:  # If shifting horisontally
+                    self.move(0, 10)
+            else:
+                self.move(0, 10)
 
 
 class Hitpoint(pygame.sprite.Sprite):
@@ -227,7 +241,7 @@ class Spike(pygame.sprite.Sprite):
         super().__init__(danger, glb)
         self.image = pygame.transform.scale(load_image('spikes.png'), (100, 54))
         self.rect = self.image.get_rect()
-        self.rect.x, self.rect.y = int(x * 100), int(y * 100)
+        self.rect.x, self.rect.y = int(x * 100), int(y * 100) + 50
         self.mask = pygame.mask.from_surface(self.image)
 
 
@@ -379,6 +393,10 @@ class Enemy(Player):
         if pygame.sprite.spritecollideany(self, danger):
             self.take_damage(d.damage, False)
 
+    def fall(self):
+        if self.st != 's':
+            self.move(0, 10)
+
 
 class Chaser(Enemy):
     def __init__(self, x, y, im='enemy1'):
@@ -516,33 +534,54 @@ class Jumper(Enemy):
                 self.st = ''
 
 
+def ch_bg():
+    global BG
+    BG += 1
+    BG = BG % 3
+    settings[0] = 'BG:' + str(BG)
+
+
+def setvalue(a, b):
+    globals()[a] = b
+
+
 def change_list(n):
-    global btns, c, texts
+    global btns, c, texts, sel
     if n == 0:
         btns = [Button(w // 2 - 150, h // 5 - 30, 'Select stage', change_list, 1),
-                Button(w // 2 - 100, h // 5 * 2 - 30, 'Settings', change_list, 2)]
-
+                Button(w // 2 - 100, h // 5 * 2 - 30, 'Settings', change_list, 2),
+                Button(w // 2 - 110, h // 5 * 3 - 30, 'Quit game', setvalue, ['running', False])]
         def texts():
             pass
 
     elif n == 1:
-        btns = [Button(w // 5, h // 2 - 30, '1', game_restart)]
-
+        btns = [Button(w // 5, h // 2 - 30, '1', game_restart, 'data\level1.txt')]
         def texts():
             pass
+
+    elif n == 2:
+        btns = [Button(w // 2 - 110, h // 2 - 30, 'Background', ch_bg),
+                Button(w // 2 - 50, h - 200, 'Back', change_list, 0)]
+        def texts():
+            pass
+    sel = 0
     c.replace(btns[0])
 
 
 def game_over():
     global running, menumode, c, cc, sel, btns, texts
     if not menumode:
-        btns = [Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 'YES!', game_restart),
+        btns = [Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 'YES!', game_restart, 'data/level1.txt'),
                    Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 'EXIT', change_list, 0)]
         cc = pygame.sprite.Group()
         c = LCursor()
         sel = 0
         c.replace(btns[sel])
         menumode = True
+        for e in glb:
+            e.kill()
+        for e in enemies:
+            e.kill()
         def texts():
             screen.blit(font1.render('GAME OVER.', False, (255, 0, 0)), ((w - 500) // 2, (h - 200) // 2 - 200))
             screen.blit(font1.render('RESTART?', False, (255, 255, 255)), ((w - 500) // 2 + 10, (h - 200) // 2 - 100))
@@ -564,26 +603,35 @@ def game_over():
         if event.type == pygame.QUIT:
             running = False
     screen.fill((0, 0, 0))
+    if BG == 1:
+        screen.blit(pygame.transform.scale(load_image('ricardo.png'), (w, h)), pygame.Rect(0, 0, w, h))
+    elif BG == 2:
+        screen.blit(pygame.transform.scale(load_image('ricardo2.png'), (w, h)), pygame.Rect(0, 0, w, h))
     texts()
     cc.draw(screen)
     buttons.draw(screen)
     for e in btns:
         e.update()
+    pygame.display.flip()
 
 
-def game_restart():
-    global glb, enemies
+def game_restart(levelname):
+    global glb, enemies, bg
     menumode = False
     end = False
-    running = True
-    for e in glb:
-        e.kill()
-    for e in enemies:
-        print('-')
-    ss, stairs, pp, danger, bg, health, buttons, enemies, flash, static = [pygame.sprite.Group() for i in range(10)]
-    glb = pygame.sprite.LayeredUpdates()
+    pp, danger, bg, health, buttons, enemies, flash, static = [pygame.sprite.Group() for i in range(8)]
     globals().update(locals())
-    p = Player(0, 0)
+    file = open(levelname, 'r')
+    for l in file.read().split('\n'):
+        o, x, y = l.split()
+        x, y = int(x), int(y)
+        if o == 'p':
+            Platform(x, y)
+        elif o == 's':
+            Spike(x, y)
+        elif o == 'pl':
+            p = Player(x, y)
+    Game_BackGround()
     globals().update(locals())
     d = Dagger()
     attacking = pygame.USEREVENT
@@ -591,15 +639,19 @@ def game_restart():
     protect = pygame.USEREVENT + 2
     smth = pygame.USEREVENT + 3
     pygame.time.set_timer(smth, 3000)
-    for i in range(20):
-        Platform(i * 1, 7)
-    Platform(4, 5)
-    Platform(9, 5)
-    Platform(14, 5)
-    Jumper(14, 4)
     globals().update(locals())
 
 
+settings = open('data\settings.txt', 'r').read()[:-1].split('\n')
+for l in settings:
+    a, b = l.split(':')
+    if b[0] != '"':
+        b = float(b)
+        if int(b) == b:
+            b = int(b)
+    else:
+        b = b[1:-1]
+    globals()[a] = b
 pygame.init()
 pygame.font.init()
 font1 = pygame.font.Font('data/Samson.ttf', 100)
@@ -607,30 +659,17 @@ font2 = pygame.font.Font('data/Samson.ttf', 50)
 size = w, h
 screen = pygame.display.set_mode(size)
 pygame.mouse.set_visible(False)
-clock = pygame.time.Clock()
 menumode = False
-end = False
+end = True
 running = True
-ss, stairs, pp, danger, bg, health, buttons, enemies, flash, static = [pygame.sprite.Group() for i in range(10)]
-glb = pygame.sprite.LayeredUpdates()
-p = Player(0, 0)
-globals().update(locals())
-d = Dagger()
-attacking = pygame.USEREVENT
-flasht = pygame.USEREVENT + 1
-protect = pygame.USEREVENT + 2
-smth = pygame.USEREVENT + 3
-pygame.time.set_timer(smth, 3000)
-for i in range(20):
-    Platform(i * 1, 7)
-Platform(4, 5)
-Platform(9, 5)
-Platform(14, 5)
-Jumper(14, 4)
+buttons, glb, enemies = [pygame.sprite.Group() for i in range(3)]
+clock = pygame.time.Clock()
+game_over()
+change_list(0)
 
 
 def main():
-    global running, cell
+    global running
     p.update()
     if pygame.key.get_pressed()[pygame.K_UP]:
         p.vert = 1
@@ -669,9 +708,9 @@ def main():
         if event.type == smth:
             e = ch([Chaser, Shooter, Jumper])
             if e != Shooter:
-                e(randint(0, 18), -1)
+                e(randint(0, 16), -1)
             else:
-                e(randint(0, 18), 2)
+                e(randint(0, 16), randint(0, 3))
 
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         p.move(-8, 0)
@@ -688,9 +727,11 @@ def main():
     for e in enemies:
         e.update()
     screen.fill((150, 150, 150))
+    bg.draw(screen)
     glb.draw(screen)
     d.update()
     buttons.draw(screen)
+    pygame.display.flip()
 
 
 while running:
@@ -698,6 +739,9 @@ while running:
         main()
     else:
         game_over()
-    pygame.display.flip()
     clock.tick(60)
+file = open('data\settings.txt', 'w')
+for e in settings:
+    file.write(e + '\n')
+file.close()
 pygame.quit()

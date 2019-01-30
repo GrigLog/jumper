@@ -8,6 +8,7 @@
           <option value="pygame.K_LSHIFT" />
           <option value="pygame.K_SPACE" />
           <option value="pygame.*" />
+          <option value="python1.*" />
         </list>
       </option>
     </inspection_tool>
