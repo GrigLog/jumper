@@ -137,7 +137,10 @@ class Player(pygame.sprite.Sprite):
         if self.todo != [[], []]:
             for i in range(len(self.todo)):
                 if self.todo[i]:
-                    self.todo[i][0][1](*self.todo[i][0][0])
+                    if type(self.todo[i][0][0]) in [list, tuple]:
+                        self.todo[i][0][1](*self.todo[i][0][0])
+                    else:
+                        self.todo[i][0][1](self.todo[i][0][0])
                     del self.todo[i][0]
 
     def move(self, x, y):
@@ -179,14 +182,14 @@ class Player(pygame.sprite.Sprite):
             else:
                 self.todo[0] = [[(0, -60), self.move] for i in range(4)]
 
-    def take_damage(self):
+    def take_damage(self, n=1):
         if not self.protected:
             self.st = ''
             pygame.time.set_timer(protect, 2000)
             self.chtex('player2.png')
-            self.hp.remove(1)
+            self.hp.remove(n)
             self.protected = True
-            self.jump()
+        self.jump()
         self.sh = True
 
     def chtex(self, image, w=False, h=False):
@@ -453,8 +456,6 @@ class Shooter(Enemy):
         if sina < 0:
             a = -a
         Fireball(self.mid[0] / 100 - 0.35, self.mid[1] / 100 - 0.2, a)
-        Fireball(self.mid[0] / 100 - 0.35, self.mid[1] / 100 - 0.2, a + 25)
-        Fireball(self.mid[0] / 100 - 0.35, self.mid[1] / 100 - 0.2, a - 25)
         self.t = Timer(3, self.attack)
         self.t.start()
 
@@ -471,10 +472,12 @@ class Shooter(Enemy):
 
 class Fireball(Enemy):
     def __init__(self, x, y, a):
-        super().__init__(x, y, 35, 21, 'fireball')
+        super().__init__(x, y, 70, 42, 'fireball')
         self.sina, self.cosa = sin(a / 57.3), cos(a / 57.3)
         self.image = pygame.transform.rotate(self.image, -a)
         self.x, self.y = self.rect.x, self.rect.y
+        self.t = Timer(5, self.kill)
+        self.t.start()
 
     def take_damage(self, n):
         pass
@@ -486,13 +489,20 @@ class Fireball(Enemy):
         pass
 
     def update(self):
-        self.move(self.cosa * 6, 0)
-        self.move(0, self.sina * 6)
+        try:
+            self.move(self.cosa * 6, 0)
+            self.move(0, self.sina * 6)
+        except Exception:
+            pass
 
     def move(self, x, y):
         self.x += x
         self.y += y
         self.rect.x, self.rect.y = int(self.x), int(self.y)
+
+    def kill(self):
+        super().kill()
+        self.t.cancel()
 
 
 class Jumper(Enemy):
@@ -587,8 +597,8 @@ def game_over(mode='loose'):
 
     if mode == 'loose':
         if not menumode:
-            btns = [Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 'YES!', game_restart, lvl),
-                       Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 'EXIT', change_list, 0)]
+            btns = [Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 'YES!', game_restart, 'data/level'+str(lvl)+'.txt'),
+                    Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 'EXIT', change_list, 0)]
             cc = pygame.sprite.Group()
             c = LCursor()
             sel = 0
@@ -603,8 +613,10 @@ def game_over(mode='loose'):
                 screen.blit(font1.render('RESTART?', False, (255, 255, 255)), ((w - 500) // 2 + 10, (h - 200) // 2 - 100))
 
     elif mode == 'win':
+        global LVL
         if not menumode:
             btns = [Button(w // 2, (h - 200) // 2 + 100, 'Ok', change_list, 0)]
+            LVL = lvl + 1
             cc = pygame.sprite.Group()
             c = LCursor()
             sel = 0
@@ -649,7 +661,7 @@ def game_over(mode='loose'):
 
 def game_restart(levelname):
     global glb, enemies, bg, waves, lvl
-    lvl = levelname
+    lvl = int(levelname[10])
     menumode = False
     end = False
     stage = 0
@@ -802,6 +814,6 @@ while running:
     clock.tick(60)
 file = open('data\settings.txt', 'w')
 for e in settings:
-    file.write(e + '\n')
+    file.write(e.split(':')[0] + ':' + str(globals()[e.split(':')[0]]) + '\n')
 file.close()
 pygame.quit()
