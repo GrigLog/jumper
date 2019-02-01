@@ -55,12 +55,18 @@ class RCursor(pygame.sprite.Sprite):
 
 
 class Button(pygame.sprite.Sprite):
-    def __init__(self, x, y, text, func, params=None, font=None):
+    def __init__(self, x, y, text, func, params=None, requirment=True, font=None):
         super().__init__(buttons)
         self.text = text
         if font is None:
             self.font = font2
-        w, h = self.font.render(self.text, False, (255, 255, 255)).get_size()
+        if not requirment:
+            self.col = (150, 150, 150)
+            self.a = False
+        else:
+            self.col = (255, 255, 255)
+            self.a = True
+        w, h = self.font.render(self.text, False, self.col).get_size()
         self.image = pygame.Surface((w, h), pygame.SRCALPHA)
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = x - 5, y
@@ -69,7 +75,7 @@ class Button(pygame.sprite.Sprite):
         self.params = params
 
     def update(self):
-        screen.blit(self.font.render(self.text, False, (255, 255, 255)), (self.rect.x, self.rect.y))
+        screen.blit(self.font.render(self.text, False, self.col), (self.rect.x, self.rect.y))
 
     def activate(self):
         if self.params is None:
@@ -103,15 +109,18 @@ class Player(pygame.sprite.Sprite):
         self.todo = [[], []]
 
     def player_init(self):
-        global pp
+        global pp, p, d
         self.image = pygame.transform.scale(load_image('player.png'), (50, 80))
         self.rect = self.image.get_rect()
+        self.view = 1
         self.vert = 0
         self.shifting = False
         self.hp = Health(4)
         self.protected = False
+        p = self
         pp = pygame.sprite.Group()
         pp.add(self)
+        d = Dagger()
 
     def update(self):
         self.mid = [self.rect.x + self.rect[2], self.rect.y + self.rect[3]]
@@ -247,8 +256,8 @@ class Spike(pygame.sprite.Sprite):
 
 class Flash(pygame.sprite.Sprite):
     def __init__(self, x, y, rev):
-        global flasht
-        super().__init__(flash, glb)
+        global flash
+        super().__init__(flash)
         self.image = pygame.transform.scale(load_image('flash.png'), (192, 45))
         if p.vert == 1:
             self.image = pygame.transform.rotate(self.image, 90)
@@ -427,7 +436,7 @@ class Shooter(Enemy):
     def __init__(self, x, y):
         super().__init__(x, y, 60, 70, 'enemy2')
         self.hp = 5
-        self.t = Timer(2, self.attack)
+        self.t = Timer(1, self.attack)
         self.t.start()
 
     def update(self):
@@ -444,7 +453,9 @@ class Shooter(Enemy):
         if sina < 0:
             a = -a
         Fireball(self.mid[0] / 100 - 0.35, self.mid[1] / 100 - 0.2, a)
-        self.t = Timer(2, self.attack)
+        Fireball(self.mid[0] / 100 - 0.35, self.mid[1] / 100 - 0.2, a + 25)
+        Fireball(self.mid[0] / 100 - 0.35, self.mid[1] / 100 - 0.2, a - 25)
+        self.t = Timer(3, self.attack)
         self.t.start()
 
     def jump(self, fromplayer=True):
@@ -460,9 +471,10 @@ class Shooter(Enemy):
 
 class Fireball(Enemy):
     def __init__(self, x, y, a):
-        super().__init__(x, y, 70, 42, 'fireball')
+        super().__init__(x, y, 35, 21, 'fireball')
         self.sina, self.cosa = sin(a / 57.3), cos(a / 57.3)
         self.image = pygame.transform.rotate(self.image, -a)
+        self.x, self.y = self.rect.x, self.rect.y
 
     def take_damage(self, n):
         pass
@@ -474,12 +486,13 @@ class Fireball(Enemy):
         pass
 
     def update(self):
-        self.move(self.cosa * 8, 0)
-        self.move(0, self.sina * 8)
+        self.move(self.cosa * 6, 0)
+        self.move(0, self.sina * 6)
 
     def move(self, x, y):
-        self.rect.x += x
-        self.rect.y += y
+        self.x += x
+        self.y += y
+        self.rect.x, self.rect.y = int(self.x), int(self.y)
 
 
 class Jumper(Enemy):
@@ -555,7 +568,8 @@ def change_list(n):
             pass
 
     elif n == 1:
-        btns = [Button(w // 5, h // 2 - 30, '1', game_restart, 'data\level1.txt')]
+        btns = [Button(w // 5, h // 2 - 30, '1', game_restart, 'data\level1.txt'),
+                Button(w // 5 * 2, h // 2 - 30, '2', game_restart, 'data\level2.txt', LVL >= 2)]
         def texts():
             pass
 
@@ -568,36 +582,54 @@ def change_list(n):
     c.replace(btns[0])
 
 
-def game_over():
+def game_over(mode='loose'):
     global running, menumode, c, cc, sel, btns, texts
-    if not menumode:
-        btns = [Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 'YES!', game_restart, 'data/level1.txt'),
-                   Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 'EXIT', change_list, 0)]
-        cc = pygame.sprite.Group()
-        c = LCursor()
-        sel = 0
-        c.replace(btns[sel])
-        menumode = True
-        for e in glb:
-            e.kill()
-        for e in enemies:
-            e.kill()
-        def texts():
-            screen.blit(font1.render('GAME OVER.', False, (255, 0, 0)), ((w - 500) // 2, (h - 200) // 2 - 200))
-            screen.blit(font1.render('RESTART?', False, (255, 255, 255)), ((w - 500) // 2 + 10, (h - 200) // 2 - 100))
+
+    if mode == 'loose':
+        if not menumode:
+            btns = [Button((w - 500) // 2 + 50, (h - 200) // 2 + 100, 'YES!', game_restart, lvl),
+                       Button((w - 500) // 2 + 250, (h - 200) // 2 + 100, 'EXIT', change_list, 0)]
+            cc = pygame.sprite.Group()
+            c = LCursor()
+            sel = 0
+            c.replace(btns[sel])
+            menumode = True
+            for e in glb:
+                e.kill()
+            for e in enemies:
+                e.kill()
+            def texts():
+                screen.blit(font1.render('GAME OVER.', False, (255, 0, 0)), ((w - 500) // 2, (h - 200) // 2 - 200))
+                screen.blit(font1.render('RESTART?', False, (255, 255, 255)), ((w - 500) // 2 + 10, (h - 200) // 2 - 100))
+
+    elif mode == 'win':
+        if not menumode:
+            btns = [Button(w // 2, (h - 200) // 2 + 100, 'Ok', change_list, 0)]
+            cc = pygame.sprite.Group()
+            c = LCursor()
+            sel = 0
+            c.replace(btns[sel])
+            menumode = True
+            for e in glb:
+                e.kill()
+            for e in enemies:
+                e.kill()
+
+            def texts():
+                screen.blit(font1.render('CONGRATS!', False, (0, 200, 0)), (w // 2 - 180, (h - 200) // 2 - 200))
 
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 running = False
             if event.key in [pygame.K_DOWN, pygame.K_RIGHT]:
-                sel += 1
-                sel = sel % len(btns)
-                c.replace(btns[sel])
+                if btns[(sel + 1) % len(btns)].a:
+                    sel = (sel + 1) % len(btns)
+                    c.replace(btns[sel])
             if event.key in [pygame.K_UP, pygame.K_LEFT]:
-                sel -= 1
-                sel = sel % len(btns)
-                c.replace(btns[sel])
+                if btns[(sel - 1) % len(btns)].a:
+                    sel = (sel - 1) % len(btns)
+                    c.replace(btns[sel])
             if event.key == 13:
                 btns[sel].activate()
         if event.type == pygame.QUIT:
@@ -616,29 +648,46 @@ def game_over():
 
 
 def game_restart(levelname):
-    global glb, enemies, bg
+    global glb, enemies, bg, waves, lvl
+    lvl = levelname
     menumode = False
     end = False
+    stage = 0
     pp, danger, bg, health, buttons, enemies, flash, static = [pygame.sprite.Group() for i in range(8)]
     globals().update(locals())
     file = open(levelname, 'r')
+    waves = []
+    arr = []
     for l in file.read().split('\n'):
+        if l == '':
+            continue
         o, x, y = l.split()
         x, y = int(x), int(y)
         if o == 'p':
-            Platform(x, y)
+            arr.append((Platform, (x, y)))
         elif o == 's':
-            Spike(x, y)
+            arr.append((Spike, (x, y)))
         elif o == 'pl':
-            p = Player(x, y)
+            arr.append((Player, (x, y)))
+        elif o == 'c':
+            arr.append((Chaser, (x, y)))
+        elif o == 'j':
+            arr.append((Jumper, (x, y)))
+        elif o == 'sh':
+            arr.append((Shooter, (x, y)))
+        elif o == 'fin':
+            arr.append('fin')
+        elif o == 'w':
+            waves.append(arr)
+            arr = []
+
     Game_BackGround()
     globals().update(locals())
-    d = Dagger()
     attacking = pygame.USEREVENT
     flasht = pygame.USEREVENT + 1
     protect = pygame.USEREVENT + 2
     smth = pygame.USEREVENT + 3
-    pygame.time.set_timer(smth, 3000)
+    pygame.time.set_timer(smth, 1000)
     globals().update(locals())
 
 
@@ -662,6 +711,7 @@ pygame.mouse.set_visible(False)
 menumode = False
 end = True
 running = True
+lvl = 'data/level1.txt'
 buttons, glb, enemies = [pygame.sprite.Group() for i in range(3)]
 clock = pygame.time.Clock()
 game_over()
@@ -669,8 +719,10 @@ change_list(0)
 
 
 def main():
-    global running
-    p.update()
+    global running, stage, end
+    if 'p' in globals():
+        p.update()
+        d.update()
     if pygame.key.get_pressed()[pygame.K_UP]:
         p.vert = 1
     if pygame.key.get_pressed()[pygame.K_DOWN]:
@@ -705,12 +757,21 @@ def main():
         if event.type == attacking:
             d.a = True
 
-        if event.type == smth:
-            e = ch([Chaser, Shooter, Jumper])
+        if (event.type == smth or stage == 0) and not enemies.sprites():
+            for e in waves[stage]:
+                if e != 'fin':
+                    e[0](*e[1])
+                else:
+                    end = True
+                    game_over('win')
+            stage += 1
+
+        """if event.type == smth:
+            e = ch([Shooter])
             if e != Shooter:
                 e(randint(0, 16), -1)
             else:
-                e(randint(0, 16), randint(0, 3))
+                e(randint(0, 15), randint(0, 3))"""
 
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         p.move(-8, 0)
@@ -726,10 +787,9 @@ def main():
 
     for e in enemies:
         e.update()
-    screen.fill((150, 150, 150))
     bg.draw(screen)
     glb.draw(screen)
-    d.update()
+    flash.draw(screen)
     buttons.draw(screen)
     pygame.display.flip()
 
