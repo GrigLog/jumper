@@ -1,10 +1,15 @@
+# path = getattr(sys, '_MEIPASS', os.getcwd())
+
 import pygame
 import os
+import sys
 import ctypes
 from threading import Timer
 from random import randint, choice as ch
 from math import sin, cos
 import math
+
+path = os.getcwd()
 
 
 '''w, h = ctypes.windll.user32.GetSystemMetrics(0),\
@@ -13,7 +18,7 @@ w, h = 1600, 900
 
 
 def load_image(name, colorkey=None):
-    fullname = os.path.join('data', name)
+    fullname = os.path.join(os.path.join(path, 'images'), name)
     try:
         image = pygame.image.load(fullname).convert_alpha()
     except pygame.error as message:
@@ -96,7 +101,7 @@ class Game_BackGround(pygame.sprite.Sprite):
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y, main=True):
-        super().__init__(glb)
+        super().__init__()
         if main:
             self.player_init()
         self.rect.x, self.rect.y = int(x * 100) + 25, int(y * 100)
@@ -171,7 +176,7 @@ class Player(pygame.sprite.Sprite):
             self.j = False
 
     def jump(self):
-        self.todo[0] = [[(0, -20), self.move] for i in range(14)]
+        self.todo[0] = [[(0, -18), self.move] for i in range(15)]
         self.j = False
 
     def shift(self):
@@ -508,10 +513,8 @@ class Fireball(Enemy):
 class Jumper(Enemy):
     def __init__(self, x, y, im='enemy3'):
         super().__init__(x, y, 42, 78, im)
-        self.t = Timer(2, self.customjump)
+        self.t = Timer(3, self.customjump)
         self.t.start()
-        self.t2 = Timer(1.7, self.chtex, args=[self.im + '-s.png', 42, 48])
-        self.t2.start()
 
     def update(self):
         super().update()
@@ -521,15 +524,13 @@ class Jumper(Enemy):
     def customjump(self):
         self.chtex(self.im + '.png', 42, 78)
         self.st = ''
-        self.todo[0] = [[(0, -35 + i), self.move] for i in range(randint(14, 17))]
+        self.todo[0] = [[(0, -30 + i), self.move] for i in range(randint(16, 19))]
         if self.mid[0] - p.mid[0] > 0:
             self.view = -1
         else:
             self.view = 1
         self.t = Timer(2, self.customjump)
         self.t.start()
-        self.t2 = Timer(1.7, self.chtex, args=[self.im + '-s.png', 42, 58])
-        self.t2.start()
 
     def move(self, x, y):
         if self.view == 1 and x < 0:
@@ -665,7 +666,7 @@ def game_restart(levelname):
     menumode = False
     end = False
     stage = 0
-    pp, danger, bg, health, buttons, enemies, flash, static = [pygame.sprite.Group() for i in range(8)]
+    pp, danger, bg, health, buttons, flash, static, enemies = [pygame.sprite.Group() for i in range(8)]
     globals().update(locals())
     file = open(levelname, 'r')
     waves = []
@@ -702,7 +703,6 @@ def game_restart(levelname):
     pygame.time.set_timer(smth, 1000)
     globals().update(locals())
 
-
 settings = open('data\settings.txt', 'r').read()[:-1].split('\n')
 for l in settings:
     a, b = l.split(':')
@@ -715,8 +715,8 @@ for l in settings:
     globals()[a] = b
 pygame.init()
 pygame.font.init()
-font1 = pygame.font.Font('data/Samson.ttf', 100)
-font2 = pygame.font.Font('data/Samson.ttf', 50)
+font1 = pygame.font.Font('images/Samson.ttf', 100)
+font2 = pygame.font.Font('images/Samson.ttf', 50)
 size = w, h
 screen = pygame.display.set_mode(size)
 pygame.mouse.set_visible(False)
@@ -795,12 +795,17 @@ def main():
             if p.jcounter > 30:
                 p.jcounter = 0
                 p.st = ''
-            p.move(0, -20)
+            p.move(0, -18)
 
     for e in enemies:
         e.update()
     bg.draw(screen)
+    pp.draw(screen)
     glb.draw(screen)
+    try:
+        enemies.draw(screen)
+    except Exception:
+        pass
     flash.draw(screen)
     buttons.draw(screen)
     pygame.display.flip()
@@ -812,7 +817,7 @@ while running:
     else:
         game_over()
     clock.tick(60)
-file = open('data\settings.txt', 'w')
+file = open(os.path.join(os.getcwd(), 'data\settings.txt'), 'w')
 for e in settings:
     file.write(e.split(':')[0] + ':' + str(globals()[e.split(':')[0]]) + '\n')
 file.close()
