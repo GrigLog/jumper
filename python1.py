@@ -1,5 +1,3 @@
-# path = getattr(sys, '_MEIPASS', os.getcwd())
-
 import pygame
 import os
 import sys
@@ -9,7 +7,9 @@ from random import randint, choice as ch
 from math import sin, cos
 import math
 
+# path = os.environ['_MEIPASS']
 path = os.getcwd()
+
 
 
 '''w, h = ctypes.windll.user32.GetSystemMetrics(0),\
@@ -297,8 +297,8 @@ class Flash(pygame.sprite.Sprite):
                     p.jump()
 
     def destroy(self):
-        self.kill()
         d.dirty = 0
+        self.kill()
 
 
 class Dagger(pygame.sprite.Sprite):
@@ -471,8 +471,8 @@ class Shooter(Enemy):
         pass
 
     def kill(self):
-        super().kill()
         self.t.cancel()
+        super().kill()
 
 
 class Fireball(Enemy):
@@ -481,8 +481,6 @@ class Fireball(Enemy):
         self.sina, self.cosa = sin(a / 57.3), cos(a / 57.3)
         self.image = pygame.transform.rotate(self.image, -a)
         self.x, self.y = self.rect.x, self.rect.y
-        self.t = Timer(5, self.kill)
-        self.t.start()
 
     def take_damage(self, n):
         pass
@@ -499,15 +497,13 @@ class Fireball(Enemy):
             self.move(0, self.sina * 6)
         except Exception:
             pass
+        if not self.rect.colliderect(screen_rect):
+            self.kill()
 
     def move(self, x, y):
         self.x += x
         self.y += y
         self.rect.x, self.rect.y = int(self.x), int(self.y)
-
-    def kill(self):
-        super().kill()
-        self.t.cancel()
 
 
 class Jumper(Enemy):
@@ -557,6 +553,82 @@ class Jumper(Enemy):
             if self.st != 'j':
                 self.st = ''
 
+    def kill(self):
+        self.t.cancel()
+        super().kill()
+
+
+class FShifter(Enemy):
+    def __init__(self, x, y, im='fshifter'):
+        super().__init__(x, y, 153, 48, im)
+        self.image_copy = self.image.copy()
+        self.a = False
+        self.x, self.y = x * 100, y * 100
+        self.t = Timer(3, self.attack)
+        self.t.start()
+
+    def take_damage(self, n, fromplayer=True):
+        if not self.a:
+            super().take_damage(n, fromplayer)
+
+    def update(self):
+        super().update()
+        if not self.a:
+            d = ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[1] - p.mid[1]) ** 2) ** 0.5
+            sina = (p.mid[1] - self.mid[1]) / d
+            cosa = (p.mid[0] - self.mid[0]) / d
+            a = math.acos(cosa) * 57.3
+            if sina < 0:
+                a = -a
+            self.image = pygame.transform.rotate(self.image_copy, -a)
+            self.move(cos(a / 57.3) * 3, 0)  # rad needed
+            self.move(0, sin(a / 57.3) * 3)
+        else:
+            self.move(cos(self.an) * 14, 0)
+            self.move(0, sin(self.an) * 14)
+
+    def attack(self):
+        self.a = True
+        d = ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[1] - p.mid[1]) ** 2) ** 0.5
+        sina = (p.mid[1] - self.mid[1]) / d
+        cosa = (p.mid[0] - self.mid[0]) / d
+        self.an = math.acos(cosa)  # radians
+        if sina < 0:
+            self.an = -self.an
+        self.image = pygame.transform.rotate(pygame.transform.scale(load_image(self.im + '-s.png'), (153, 48)), -self.an * 57.3)
+        self.t.cancel()
+        self.t = Timer(1, self.stop)
+        self.t.start()
+
+    def take_damage(self, n, fromplayer=True):
+        if not self.a:
+            self.hp -= n
+            self.chtex(self.im + '-d.png')
+            self.image_copy = self.image.copy()
+            self.timer = 20
+
+    def stop(self):
+        self.a = False
+        self.chtex(self.im + '.png')
+        self.t = Timer(3, self.attack)
+        self.t.start()
+
+    def move(self, x, y):
+        self.x += x
+        self.y += y
+        self.rect.x, self.rect.y = int(self.x), int(self.y)
+        '''super().move(int(self.x - self.rect.x), 0)
+        super().move(0, int(self.y - self.rect.y))'''
+
+    def fall(self):
+        pass
+    
+    def chtex
+
+    def kill(self):
+        self.t.cancel()
+        super().kill()
+
 
 def ch_bg():
     global BG
@@ -580,7 +652,8 @@ def change_list(n):
 
     elif n == 1:
         btns = [Button(w // 5, h // 2 - 30, '1', game_restart, 'data\level1.txt'),
-                Button(w // 5 * 2, h // 2 - 30, '2', game_restart, 'data\level2.txt', LVL >= 2)]
+                Button(w // 5 * 2, h // 2 - 30, '2', game_restart, 'data\level2.txt', LVL >= 2),
+                Button(w // 5 * 3, h // 2 - 30, '3', game_restart, 'data\level3.txt', LVL >= 3)]
         def texts():
             pass
 
@@ -617,7 +690,8 @@ def game_over(mode='loose'):
         global LVL
         if not menumode:
             btns = [Button(w // 2, (h - 200) // 2 + 100, 'Ok', change_list, 0)]
-            LVL = lvl + 1
+            if lvl == LVL:
+                LVL = lvl + 1
             cc = pygame.sprite.Group()
             c = LCursor()
             sel = 0
@@ -688,6 +762,8 @@ def game_restart(levelname):
             arr.append((Jumper, (x, y)))
         elif o == 'sh':
             arr.append((Shooter, (x, y)))
+        elif o == 'fs':
+            arr.append((FShifter, (x, y)))
         elif o == 'fin':
             arr.append('fin')
         elif o == 'w':
@@ -719,6 +795,7 @@ font1 = pygame.font.Font('images/Samson.ttf', 100)
 font2 = pygame.font.Font('images/Samson.ttf', 50)
 size = w, h
 screen = pygame.display.set_mode(size)
+screen_rect = pygame.Rect(0, 0, w, h)
 pygame.mouse.set_visible(False)
 menumode = False
 end = True
