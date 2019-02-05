@@ -66,7 +66,7 @@ class Button(pygame.sprite.Sprite):
         if font is None:
             self.font = font2
         if not requirment:
-            self.col = (150, 150, 150)
+            self.col = (130, 130, 130)
             self.a = False
         else:
             self.col = (255, 255, 255)
@@ -560,12 +560,16 @@ class Jumper(Enemy):
 
 class FShifter(Enemy):
     def __init__(self, x, y, im='fshifter'):
-        super().__init__(x, y, 153, 48, im)
+        super().__init__(x, y, 102, 36, im)
         self.image_copy = self.image.copy()
         self.a = False
+        self.ready = False
         self.x, self.y = x * 100, y * 100
-        self.t = Timer(3, self.attack)
+        self.t = Timer(3, self.setready)
         self.t.start()
+
+    def setready(self):
+        self.ready = True
 
     def take_damage(self, n, fromplayer=True):
         if not self.a:
@@ -573,6 +577,9 @@ class FShifter(Enemy):
 
     def update(self):
         super().update()
+        if self.ready and ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[1] - p.mid[1]) ** 2) ** 0.5 <= 400:
+            self.ready = False
+            self.attack()
         if not self.a:
             d = ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[1] - p.mid[1]) ** 2) ** 0.5
             sina = (p.mid[1] - self.mid[1]) / d
@@ -597,20 +604,33 @@ class FShifter(Enemy):
             self.an = -self.an
         self.image = pygame.transform.rotate(pygame.transform.scale(load_image(self.im + '-s.png'), (153, 48)), -self.an * 57.3)
         self.t.cancel()
-        self.t = Timer(1, self.stop)
+        self.t = Timer(0.5, self.stop)
         self.t.start()
 
     def take_damage(self, n, fromplayer=True):
-        if not self.a:
+        if not self.a and fromplayer:
+            self.jump()
             self.hp -= n
             self.chtex(self.im + '-d.png')
-            self.image_copy = self.image.copy()
             self.timer = 20
+
+    def jump(self, fromplayer=True):
+        if fromplayer:
+            d = ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[1] - p.mid[1]) ** 2) ** 0.5
+            sina = - (p.mid[1] - self.mid[1]) / d
+            cosa = - (p.mid[0] - self.mid[0]) / d
+            self.todo[0] = [((cosa * 12, 0), self.move), ((0, sina * 12), self.move), ((cosa * 12, 0), self.move), ((0, sina * 12), self.move), ((cosa * 12, 0), self.move), ((0, sina * 12), self.move)]
+            self.move(cosa * 4, 0)
+            self.move(0, sina * 4)
+
+    def chtex(self, image):
+        super().chtex(image)
+        self.image_copy = self.image
 
     def stop(self):
         self.a = False
         self.chtex(self.im + '.png')
-        self.t = Timer(3, self.attack)
+        self.t = Timer(3, self.setready)
         self.t.start()
 
     def move(self, x, y):
@@ -622,8 +642,6 @@ class FShifter(Enemy):
 
     def fall(self):
         pass
-    
-    def chtex
 
     def kill(self):
         self.t.cancel()
@@ -645,15 +663,16 @@ def change_list(n):
     global btns, c, texts, sel
     if n == 0:
         btns = [Button(w // 2 - 150, h // 5 - 30, 'Select stage', change_list, 1),
-                Button(w // 2 - 100, h // 5 * 2 - 30, 'Settings', change_list, 2),
-                Button(w // 2 - 110, h // 5 * 3 - 30, 'Quit game', setvalue, ['running', False])]
+                Button(w // 2 - 120, h // 5 * 2 - 30, 'Power-ups', change_list, 3, LVL > 4),
+                Button(w // 2 - 100, h // 5 * 3 - 30, 'Settings', change_list, 2),
+                Button(w // 2 - 110, h // 5 * 4 - 30, 'Quit game', setvalue, ['running', False])]
         def texts():
             pass
 
     elif n == 1:
         btns = [Button(w // 5, h // 2 - 30, '1', game_restart, 'data\level1.txt'),
-                Button(w // 5 * 2, h // 2 - 30, '2', game_restart, 'data\level2.txt', LVL >= 2),
-                Button(w // 5 * 3, h // 2 - 30, '3', game_restart, 'data\level3.txt', LVL >= 3)]
+                Button(w // 5 * 2, h // 2 - 30, '2', game_restart, 'data\level2.txt', LVL > 1),
+                Button(w // 5 * 3, h // 2 - 30, '3', game_restart, 'data\level3.txt', LVL > 2)]
         def texts():
             pass
 
@@ -710,13 +729,15 @@ def game_over(mode='loose'):
             if event.key == pygame.K_ESCAPE:
                 running = False
             if event.key in [pygame.K_DOWN, pygame.K_RIGHT]:
-                if btns[(sel + 1) % len(btns)].a:
+                sel = (sel + 1) % len(btns)
+                while not btns[sel].a:
                     sel = (sel + 1) % len(btns)
-                    c.replace(btns[sel])
+                c.replace(btns[sel])
             if event.key in [pygame.K_UP, pygame.K_LEFT]:
-                if btns[(sel - 1) % len(btns)].a:
+                sel = (sel - 1) % len(btns)
+                while not btns[sel].a:
                     sel = (sel - 1) % len(btns)
-                    c.replace(btns[sel])
+                c.replace(btns[sel])
             if event.key == 13:
                 btns[sel].activate()
         if event.type == pygame.QUIT:
