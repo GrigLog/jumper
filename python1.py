@@ -196,12 +196,12 @@ class Player(pygame.sprite.Sprite):
         if self.sh:
             self.sh = False
             self.shifting = True
-            if self.vert == 0:
+            if self.vert != 1:
                 self.todo[0] = [[(50 * self.view, 0), self.move] for i in range(4)]
-            elif self.vert == 1:
+            else:
                 self.todo[0] = [[(0, -62), self.move] for i in range(4)]
-            elif self.vert == -1:
-                self.todo[0] = [[(0, 40), self.move] for i in range(4)]
+            '''elif self.vert == -1:
+                self.todo[0] = [[(0, 40), self.move] for i in range(4)]'''
 
     def take_damage(self, n=1):
         if not self.protected:
