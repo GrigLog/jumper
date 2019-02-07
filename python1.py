@@ -115,13 +115,19 @@ class Player(pygame.sprite.Sprite):
         self.todo = [[], []]
 
     def player_init(self):
-        global pp, p, d
-        self.image = pygame.transform.scale(load_image('player.png'), (50, 80))
+        global pp, p, d, dd
+        if AB == 4:
+            self.image = pygame.transform.scale(load_image('player.png'), (25, 40))
+        else:
+            self.image = pygame.transform.scale(load_image('player.png'), (50, 80))
         self.rect = self.image.get_rect()
         self.view = 1
         self.vert = 0
         self.shifting = False
-        self.hp = Health(4)
+        if AB != 2:
+            self.hp = Health(4)
+        else:
+            self.hp = Health(6)
         self.protected = False
         p = self
         pp = pygame.sprite.Group()
@@ -140,7 +146,7 @@ class Player(pygame.sprite.Sprite):
                 if not (AB == 1 and self.shifting):  # not shifting with Shadow
                     self.take_damage()
         if self.todo[0]:
-            if not self.todo[0][0][0] in [(50 * self.view, 0),  (0, -62)]:
+            if not self.todo[0][0][0] in [(50 * self.view, 0),  (0, -62), (0, 40)]:
                 self.shifting = False
         else:
             self.shifting = False
@@ -190,10 +196,12 @@ class Player(pygame.sprite.Sprite):
         if self.sh:
             self.sh = False
             self.shifting = True
-            if self.vert != 1:
+            if self.vert == 0:
                 self.todo[0] = [[(50 * self.view, 0), self.move] for i in range(4)]
-            else:
+            elif self.vert == 1:
                 self.todo[0] = [[(0, -62), self.move] for i in range(4)]
+            elif self.vert == -1:
+                self.todo[0] = [[(0, 40), self.move] for i in range(4)]
 
     def take_damage(self, n=1):
         if not self.protected:
@@ -221,7 +229,7 @@ class Player(pygame.sprite.Sprite):
                 if self.todo[0][0][0][0] == 0:  # If shifting horisontally
                     self.move(0, 10)
             else:
-                self.move(0, 10)
+                self.move(0, 9)
 
 
 class Hitpoint(pygame.sprite.Sprite):
@@ -297,12 +305,16 @@ class Flash(pygame.sprite.Sprite):
 
         self.rect[2], self.rect[3] = self.rect[2] + 10, self.rect[3] + 10
         Timer(0.1, self.destroy).start()
+        if pygame.sprite.spritecollideany(self, danger):
+            p.jump()
+            p.sh = True
         coll = pygame.sprite.groupcollide(flash, enemies, False, False)
         if coll:
             for e in coll[self]:
-                e.take_damage(4)
+                e.take_damage(d.damage)
                 if p.vert == -1:
                     p.jump()
+                    p.sh = True
 
     def destroy(self):
         d.dirty = 0
@@ -316,7 +328,9 @@ class Dagger(pygame.sprite.Sprite):
         super().__init__(dd)
         self.image = pygame.transform.scale(load_image('dagger.png'), (128, 12))
         self.a = True
-        self.damage = 3
+        self.damage = 4
+        if AB == 3:
+            self.damage = 6
         self.dirty = 0
         self.rect = self.image.get_rect()
         self.rect.x = p.rect.x + 18 + 18 * p.view
@@ -338,21 +352,32 @@ class Dagger(pygame.sprite.Sprite):
                 if p.view == -1:
                     self.image = pygame.transform.flip(self.image, True, False)
                     self.rect.x -= 30
+                else:
+                    if AB == 4:
+                        self.rect.x -= 20
+                if AB == 4:
+                    self.rect.y -= 30
         else:
             if p.view == 1:
                 self.image = pygame.transform.scale(load_image('dagger.png'), (128, 12))
                 self.rect.x = p.rect.x + 37
                 self.rect.y = p.rect.y + 46
+                if AB == 4:
+                    self.rect.y -= 30
+                    self.rect.x -= 20
             elif p.view == -1:
                 self.image = pygame.transform.scale(pygame.transform.flip(load_image('dagger.png'), True, False), (128, 12))
                 self.rect.x = p.rect.x - 116
                 self.rect.y = p.rect.y + 46
+                if AB == 4:
+                    self.rect.y -= 30
         if self.dirty:
             dd.draw(screen)
 
     def attack(self):
         if self.a:
-            self.draw()
+            self.t = Timer(1.0, self.stop)
+            self.dirty = 1
             pygame.time.set_timer(attacking, 200)
             self.a = False
             if p.view == 1:
@@ -360,23 +385,27 @@ class Dagger(pygame.sprite.Sprite):
             else:
                 Flash(self.rect.x, self.rect.y, True)
 
-    def draw(self):
-        self.dirty = 2
-
     def chtex(self, image):
         self.image = pygame.transform.scale(load_image(image), (128, 12))
         if p.view == -1:
             self.image = pygame.transform.flip(self.image, True, False)
 
+    def stop(self):
+        self.dirty = 0
+
 
 class Hand(pygame.sprite.Sprite):
-    def __init__(self, x, y, w, h, g):
+    def __init__(self, x, y, w, h):
         super().__init__()
         self.rect = pygame.Rect(x, y, w, h)
-        if pygame.sprite.spritecollideany(self, g):
+        if pygame.sprite.spritecollideany(self, enemies):
             self.a = True
         else:
             self.a = False
+        if pygame.sprite.spritecollideany(self, static):
+            self.st = True
+        else:
+            self.st = False
 
 
 class Enemy(Player):
@@ -431,13 +460,13 @@ class Chaser(Enemy):
         super().update()
         if self.st != '':
             if ((self.mid[0] - p.mid[0]) ** 2 + (self.mid[0] - p.mid[0]) ** 2) ** 0.5 <= 1000:
-                if p.mid < self.mid:
-                    h = Hand(self.rect.x - 50, self.rect.y - 100, 50, 280, danger)
-                    if not h.a:
+                if p.mid[0] < self.mid[0]:
+                    h = Hand(self.rect.x - 50, self.rect.y, 50, 180)
+                    if (not h.a) and h.st:
                         self.move(-4, 0)
                 else:
-                    h = Hand(self.rect.x + self.rect[2], self.rect.y - 100, 50, 280, danger)
-                    if not h.a:
+                    h = Hand(self.rect.x + self.rect[2], self.rect.y, 50, 180)
+                    if (not h.a) and h.st:
                         self.move(4, 0)
 
     def jump(self, fromplayer=True):
@@ -665,14 +694,22 @@ class FShifter(Enemy):
 
 def ch_ab():
     global AB, texts
-    AB = (AB + 1) % 2
+    AB = (AB + 1) % 5
     if AB == 0:
         def texts():
             screen.blit(font2.render('None', False, (255, 255, 255)), (w // 2 - 50, 200))
     elif AB == 1:
         def texts():
             screen.blit(font2.render('Shadow Dash', False, (100, 100, 100)), (w // 2 - 130, 200))
-
+    elif AB == 2:
+        def texts():
+            screen.blit(font2.render('Extra Hearts', False, (255, 60, 60)), (w // 2 - 150, 200))
+    elif AB == 3:
+        def texts():
+            screen.blit(font2.render('More Damage', False, (255, 211, 0)), (w // 2 - 140, 200))
+    elif AB == 4:
+        def texts():
+            screen.blit(font2.render('Smaller Hitbox', False, (0, 200, 200)), (w // 2 - 170, 200))
 
 def ch_bg():
     global BG
@@ -822,6 +859,8 @@ def game_restart(levelname):
             arr.append((FShifter, (x, y)))
         elif o == 'fin':
             arr.append('fin')
+        elif o == 'clear':
+            arr.append('clear')
         elif o == 'w':
             waves.append(arr)
             arr = []
@@ -867,7 +906,6 @@ def main():
     global running, stage, end
     if 'p' in globals():
         p.update()
-        d.update()
     if pygame.key.get_pressed()[pygame.K_UP]:
         p.vert = 1
     if pygame.key.get_pressed()[pygame.K_DOWN]:
@@ -904,11 +942,14 @@ def main():
 
         if (event.type == smth or stage == 0) and not enemies.sprites():
             for e in waves[stage]:
-                if e != 'fin':
+                if e not in ['fin', 'clear']:
                     e[0](*e[1])
-                else:
+                elif e == 'fin':
                     end = True
                     game_over('win')
+                elif e == 'clear':
+                    for e2 in static.sprites():
+                        e2.kill()
             stage += 1
 
         """if event.type == smth:
@@ -941,6 +982,8 @@ def main():
         pass
     flash.draw(screen)
     buttons.draw(screen)
+    if 'd' in globals():
+        d.update()
     pygame.display.flip()
 
 
