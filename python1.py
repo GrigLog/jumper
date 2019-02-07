@@ -110,6 +110,7 @@ class Player(pygame.sprite.Sprite):
         self.st = ''
         self.j = False
         self.sh = True
+        self.shifting = False
         self.jcounter = 0
         self.todo = [[], []]
 
@@ -136,7 +137,13 @@ class Player(pygame.sprite.Sprite):
         obj = pygame.sprite.spritecollideany(self, enemies)
         if obj:
             if pygame.sprite.collide_mask(self, obj):
-                self.take_damage()
+                if not (AB == 1 and self.shifting):  # not shifting with Shadow
+                    self.take_damage()
+        if self.todo[0]:
+            if not self.todo[0][0][0] in [(50 * self.view, 0),  (0, -62)]:
+                self.shifting = False
+        else:
+            self.shifting = False
 
     def do(self):
         if self.todo != [[], []]:
@@ -176,16 +183,17 @@ class Player(pygame.sprite.Sprite):
             self.j = False
 
     def jump(self):
-        self.todo[0] = [[(0, -18), self.move] for i in range(15)]
+        self.todo[0] = [[(0, -20), self.move] for i in range(15)]
         self.j = False
 
     def shift(self):
         if self.sh:
             self.sh = False
+            self.shifting = True
             if self.vert != 1:
                 self.todo[0] = [[(50 * self.view, 0), self.move] for i in range(4)]
             else:
-                self.todo[0] = [[(0, -60), self.move] for i in range(4)]
+                self.todo[0] = [[(0, -62), self.move] for i in range(4)]
 
     def take_damage(self, n=1):
         if not self.protected:
@@ -565,6 +573,7 @@ class FShifter(Enemy):
         self.a = False
         self.ready = False
         self.x, self.y = x * 100, y * 100
+        self.w, self.h = 102, 36
         self.t = Timer(3, self.setready)
         self.t.start()
 
@@ -593,6 +602,7 @@ class FShifter(Enemy):
         else:
             self.move(cos(self.an) * 14, 0)
             self.move(0, sin(self.an) * 14)
+        self.rect.w, self.rect.h = self.image.get_rect()[2:4]
 
     def attack(self):
         self.a = True
@@ -624,7 +634,12 @@ class FShifter(Enemy):
             self.move(0, sina * 4)
 
     def chtex(self, image):
-        super().chtex(image)
+        w, h = self.w, self.h
+        self.image = pygame.transform.scale(load_image(image), (w, h))
+        if self.view == -1:
+            self.image = pygame.transform.flip(self.image, True, False)
+        self.rect.y += self.rect.h - h
+        self.rect.w, self.rect.h = w, h
         self.image_copy = self.image
 
     def stop(self):
@@ -648,6 +663,17 @@ class FShifter(Enemy):
         super().kill()
 
 
+def ch_ab():
+    global AB, texts
+    AB = (AB + 1) % 2
+    if AB == 0:
+        def texts():
+            screen.blit(font2.render('None', False, (255, 255, 255)), (w // 2 - 50, 200))
+    elif AB == 1:
+        def texts():
+            screen.blit(font2.render('Shadow Dash', False, (100, 100, 100)), (w // 2 - 130, 200))
+
+
 def ch_bg():
     global BG
     BG += 1
@@ -663,7 +689,7 @@ def change_list(n):
     global btns, c, texts, sel
     if n == 0:
         btns = [Button(w // 2 - 150, h // 5 - 30, 'Select stage', change_list, 1),
-                Button(w // 2 - 120, h // 5 * 2 - 30, 'Power-ups', change_list, 3, LVL > 4),
+                Button(w // 2 - 120, h // 5 * 2 - 30, 'Power-ups', change_list, 3, LVL > 3),
                 Button(w // 2 - 100, h // 5 * 3 - 30, 'Settings', change_list, 2),
                 Button(w // 2 - 110, h // 5 * 4 - 30, 'Quit game', setvalue, ['running', False])]
         def texts():
@@ -671,14 +697,23 @@ def change_list(n):
 
     elif n == 1:
         btns = [Button(w // 5, h // 2 - 30, '1', game_restart, 'data\level1.txt'),
-                Button(w // 5 * 2, h // 2 - 30, '2', game_restart, 'data\level2.txt', LVL > 1),
-                Button(w // 5 * 3, h // 2 - 30, '3', game_restart, 'data\level3.txt', LVL > 2)]
+                Button(w // 5 * 2, h // 2 - 30, '2', game_restart, 'data\level2.txt', LVL >= 2),
+                Button(w // 5 * 3, h // 2 - 30, '3', game_restart, 'data\level3.txt', LVL >= 3),
+                Button(w // 5 * 4, h // 2 - 30, '4', game_restart, 'data\level4.txt', LVL >= 4),
+                Button(w // 2 - 50, h - 200, 'Back', change_list, 0)]
         def texts():
             pass
 
     elif n == 2:
         btns = [Button(w // 2 - 110, h // 2 - 30, 'Background', ch_bg),
                 Button(w // 2 - 50, h - 200, 'Back', change_list, 0)]
+        def texts():
+            pass
+
+    elif n == 3:
+        btns = [Button(w // 2 - 70, h // 2 - 40, 'Change', ch_ab),
+                Button(w // 2 - 50, h - 200, 'Back', change_list, 0)]
+
         def texts():
             pass
     sel = 0
@@ -895,11 +930,11 @@ def main():
                 p.st = ''
             p.move(0, -18)
 
-    for e in enemies:
-        e.update()
     bg.draw(screen)
     pp.draw(screen)
     glb.draw(screen)
+    for e in enemies:
+        e.update()
     try:
         enemies.draw(screen)
     except Exception:
