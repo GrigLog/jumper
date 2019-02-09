@@ -108,7 +108,7 @@ class Player(pygame.sprite.Sprite):
         self.view = 1
         self.mid = [self.rect.x + self.rect[2] / 2, self.rect.y + self.rect[3] / 2]
         self.st = ''
-        self.j = False
+        self.j = 0
         self.sh = True
         self.shifting = False
         self.jcounter = 0
@@ -145,6 +145,8 @@ class Player(pygame.sprite.Sprite):
             if pygame.sprite.collide_mask(self, obj):
                 if not (AB == 1 and self.shifting):  # not shifting with Shadow
                     self.take_damage()
+                else:
+                    obj.take_damage(4)
         if self.todo[0]:
             if not self.todo[0][0][0] in [(50 * self.view, 0),  (0, -62), (0, 40)]:
                 self.shifting = False
@@ -179,18 +181,23 @@ class Player(pygame.sprite.Sprite):
             elif y > 0:
                 self.st = 's'
                 self.sh = True
-                self.j = True
+                if AB == 5:
+                    self.j = 2
+                else:
+                    self.j = 1
                 self.rect.y = obj.rect.y - self.rect[3] - 1
             elif y < 0:
                 self.rect.y = obj.rect.y + obj.rect[3] + 1
         else:
             if self.st not in ['j', 'sh']:
                 self.st = ''
-            self.j = False
 
     def jump(self):
         self.todo[0] = [[(0, -20), self.move] for i in range(15)]
-        self.j = False
+        if AB == 5:
+            self.j = 1
+        else:
+            self.j = 0
 
     def shift(self):
         if self.sh:
@@ -312,6 +319,8 @@ class Flash(pygame.sprite.Sprite):
         if coll:
             for e in coll[self]:
                 e.take_damage(d.damage)
+                if AB == 5:
+                    p.j = 2
                 if p.vert == -1:
                     p.jump()
                     p.sh = True
@@ -419,6 +428,7 @@ class Enemy(Player):
         self.timer = 0
         self.mid = [self.rect.x + self.rect[2] / 2, self.rect.y + self.rect[3] / 2]
         enemies.add(self)
+        self.dj = 0
 
     def take_damage(self, n, fromplayer=True):
         self.hp -= n
@@ -642,6 +652,7 @@ class FShifter(Enemy):
         if sina < 0:
             self.an = -self.an
         self.image = pygame.transform.rotate(pygame.transform.scale(load_image(self.im + '-s.png'), (153, 48)), -self.an * 57.3)
+        self.mask = pygame.mask.from_surface(self.image)
         self.t.cancel()
         self.t = Timer(0.5, self.stop)
         self.t.start()
@@ -674,6 +685,7 @@ class FShifter(Enemy):
     def stop(self):
         self.a = False
         self.chtex(self.im + '.png')
+        self.mask = pygame.mask.from_surface(self.image)
         self.t = Timer(3, self.setready)
         self.t.start()
 
@@ -694,7 +706,7 @@ class FShifter(Enemy):
 
 def ch_ab():
     global AB, texts
-    AB = (AB + 1) % 5
+    AB = (AB + 1) % 6
     if AB == 0:
         def texts():
             screen.blit(font2.render('None', False, (255, 255, 255)), (w // 2 - 50, 200))
@@ -706,10 +718,13 @@ def ch_ab():
             screen.blit(font2.render('Extra Hearts', False, (255, 60, 60)), (w // 2 - 150, 200))
     elif AB == 3:
         def texts():
-            screen.blit(font2.render('More Damage', False, (255, 211, 0)), (w // 2 - 140, 200))
+            screen.blit(font2.render('More Damage', False, (255, 200, 0)), (w // 2 - 140, 200))
     elif AB == 4:
         def texts():
             screen.blit(font2.render('Smaller Hitbox', False, (0, 200, 200)), (w // 2 - 170, 200))
+    elif AB == 5:
+        def texts():
+            screen.blit(font2.render('Double Jump', False, (50, 255, 50)), (w // 2 - 140, 200))
 
 def ch_bg():
     global BG
@@ -726,7 +741,7 @@ def change_list(n):
     global btns, c, texts, sel
     if n == 0:
         btns = [Button(w // 2 - 150, h // 5 - 30, 'Select stage', change_list, 1),
-                Button(w // 2 - 120, h // 5 * 2 - 30, 'Power-ups', change_list, 3, LVL > 3),
+                Button(w // 2 - 120, h // 5 * 2 - 30, 'Power-ups', change_list, 3, LVL > 2),
                 Button(w // 2 - 100, h // 5 * 3 - 30, 'Settings', change_list, 2),
                 Button(w // 2 - 110, h // 5 * 4 - 30, 'Quit game', setvalue, ['running', False])]
         def texts():
@@ -919,9 +934,8 @@ def main():
             if pygame.key.get_pressed()[pygame.K_LSHIFT]:
                 p.shift()
             if pygame.key.get_pressed()[pygame.K_SPACE]:
-                if p.j and p.st == 's':
+                if p.j:  # and p.st == 's'
                     p.st = 'j'
-                    p.j = False
             if pygame.key.get_pressed()[pygame.K_x]:
                 d.attack()
 
@@ -929,6 +943,7 @@ def main():
             if event.key == pygame.K_SPACE:
                 p.st = ''
                 p.jcounter = 0
+                p.j -= 1
             if event.key in [pygame.K_UP, pygame.K_DOWN]:
                 p.vert = 0
 
